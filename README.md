@@ -13,5 +13,5 @@ produces:
     input_slowed_6.00.wav
 
 And the plot:
-[[https://github.com/andsmith/sound_stretcher/blob/main/ex_plot.jpg|alt=Example plot.]]
+[[ex_plot.jpg|Example plot.]]
 
