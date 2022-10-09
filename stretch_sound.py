@@ -23,6 +23,8 @@ class StretchyWave(object):
             self._read_wav(filename)
         elif ext == '.mp3':
             self._read_mp3(filename)
+        else:
+            raise Exception("unknown file type:  %s" % (ext, ))
 
     def _read_wav(self, filename):
         with wave.open(filename, 'rb') as wav:
@@ -30,7 +32,9 @@ class StretchyWave(object):
             data = wav.readframes(self._params.nframes)
         self._data = self._convert_from_bytes(data)
         duration = self._params.nframes / float(self._params.framerate)
-        print("Read file:  %s (%.4f sec)" % (filename, duration))
+        print("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
+                                                                   self._params.framerate,
+                                                                   self._params.nchannels))
 
     def _read_mp3(self, filename):
 
@@ -79,9 +83,12 @@ class StretchyWave(object):
         data = np.zeros(n_chan * chan_float_data[0].size, dtype=self._data[0].dtype)
         for i_chan in range(n_chan):
             data[i_chan::n_chan] = chan_float_data[i_chan]
+
         return data.tobytes()
 
     def _convert_from_bytes(self, data):
+
+        # figure out data type
         if self._params.sampwidth == 1:
             n_data = np.frombuffer(data, dtype=np.uint8)
         elif self._params.sampwidth == 2:
@@ -90,12 +97,10 @@ class StretchyWave(object):
             n_data = np.frombuffer(data, dtype=np.float32)
         else:
             raise Exception("Unknown sample width:  %i bytes" % (self._params.samplewidth,))
-        # import ipdb; ipdb.set_trace()
-        if self._params.nchannels == 2:
-            # separate interleaved channel data
-            n_data = n_data[::2], n_data[1::2]
-        else:
-            n_data = (n_data,)
+
+        # separate interleaved channel data
+        n_data = [n_data[offset::self._params.nchannels] for offset in range(self._params.nchannels)]
+
         return n_data
 
 
@@ -117,7 +122,8 @@ def run(filename, plot):
 if __name__ == "__main__":
     plot = False
     if len(sys.argv) < 2:
-        print("Syntax:  python slow_sound.py input.wav")
+        print("Syntax:  python slow_sound.py input.wav [-p]")
+        print("options:  -p to plot (slow for large files)")
         sys.exit()
     if len(sys.argv) > 2:
         if '-p' in sys.argv:
