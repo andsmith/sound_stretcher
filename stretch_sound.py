@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 
 
 class StretchyWave(object):
+    EXTENSIONS = ['.wav', '.mp3', '.ogg', '.m4a']
+
     def __init__(self, filename, plot=False):
         self._in_stem = os.path.splitext(filename)[0]
         self._read(filename)
@@ -21,10 +23,10 @@ class StretchyWave(object):
         ext = os.path.splitext(filename)[1].lower()
         if ext == '.wav':
             self._read_wav(filename)
-        elif ext == '.mp3':
-            self._read_mp3(filename)
+        elif ext in StretchyWave.EXTENSIONS:
+            self._read_other(filename)
         else:
-            raise Exception("unknown file type:  %s" % (ext, ))
+            raise Exception("unknown file type, not one of %s:  %s" % (StretchyWave.EXTENSIONS, ext))
 
     def _read_wav(self, filename):
         with wave.open(filename, 'rb') as wav:
@@ -36,7 +38,7 @@ class StretchyWave(object):
                                                                    self._params.framerate,
                                                                    self._params.nchannels))
 
-    def _read_mp3(self, filename):
+    def _read_other(self, filename):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_wav = os.path.join(temp_dir, "%s.wav" % (self._in_stem,))
