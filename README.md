@@ -13,5 +13,5 @@ produces:
     input_slowed_6.00.wav
 
 And the plot:
-[[/ex_plot.jpg]]
+[[ex_plot.jpg]]
 
