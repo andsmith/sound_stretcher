@@ -13,4 +13,4 @@ produces:
     input_slowed_6.00.wav
 
 And the plot:
-![Example 1-channel plot](/ex_plot.png)
+![Example 1-channel plot](/ex_plot.jpg)
