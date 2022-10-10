@@ -22,24 +22,19 @@ They sound like dinosaurs!
 
 ### Details
 
-Input: `wav`, `mp3`, `m4a`, `ogg`  (all but `wav` require `ffmpeg` to convert)
-
-Output:  `wav`
+File Types:
+ * input: `wav`, `mp3`, `m4a`, `ogg`  (all but wav require ffmpeg to convert)
+ * output:  `wav`
 
 Example:
 
-    python stretch_sound.py input.wav -p
+    python stretch_sound.py input.wav -f 4.0 -p 0.5 -d 5.0
 
 produces:
 
-    input_slowed_2.00.wav
     input_slowed_4.00.wav
-    input_slowed_6.00.wav
     
 
-and the plot (this one is zoomed):
+and plots 0.5 seconds of the waveforms after the first 5 seconds:
 
-![Example 1-channel plot, zoomed in.](https://github.com/andsmith/sound_stretcher/blob/main/ex_plot.jpg).
-
-(Edit `run()` to stretch by different factors, etc.)
-
+![Example 1-channel plot, zoomed in.](https://github.com/andsmith/sound_stretcher/blob/main/ex_plot.png).
