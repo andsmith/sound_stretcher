@@ -28,13 +28,13 @@ File Types:
 
 Example:
 
-    python stretch_sound.py input.wav -f 4.0 -p 0.5 -d 5.0
+    python stretch_sound.py input.wav -f 4.0 -p 2.0 -d 5.0
 
 produces:
 
     input_slowed_4.00.wav
     
 
-and plots 0.5 seconds of the waveforms after the first 5 seconds. (`python stretch_sound.py --help` for all args) This is the plot, zoomed-in to show the interpolation:
+and plots 2.0 seconds of the waveforms after a 5-second delay. (Run `python stretch_sound.py --help` for all args.)  This is the plot, zoomed-in to show the interpolation:
 
 ![Example 1-channel plot, zoomed in.](https://github.com/andsmith/sound_stretcher/blob/main/ex_plot.png).
