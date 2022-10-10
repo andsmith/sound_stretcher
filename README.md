@@ -5,7 +5,7 @@ Stretch time and frequency by interpolating between samples at the desired rate.
 Compare to these similar (but much trickier) tasks:
 
 * Autotune:  (Keep time parameters constant, shift frequency)
-* PaulStretch:  (Keep frequencies constant, stretch out time).
+* Paul's Extreme Time Stretch:  (Keep frequencies constant, stretch out time).
 
 
 This was originally written for listening to birdsong, to bring the incomprehensibly high frequencies and fast frequency changes into human range at the same time.  There was no resason to expect them to scale so nicely together, but they do!  Try it out on these birds:
