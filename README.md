@@ -35,6 +35,6 @@ produces:
     input_slowed_4.00.wav
     
 
-and plots 0.5 seconds of the waveforms after the first 5 seconds:
+and plots 0.5 seconds of the waveforms after the first 5 seconds.  This is the plot, zoomed-in to show the interpolation:
 
 ![Example 1-channel plot, zoomed in.](https://github.com/andsmith/sound_stretcher/blob/main/ex_plot.png).
