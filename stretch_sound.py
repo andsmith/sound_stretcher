@@ -1,4 +1,5 @@
 import numpy as np
+import librosa
 import sys
 import os
 import wave
@@ -7,35 +8,63 @@ import argparse
 import subprocess
 import tempfile
 import matplotlib.pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Rectangle
+
+
+def _resample(chan_data, n_samples):
+    """
+    Resample for plotting.
+
+    :param chan_data:  list of numpy arrays of N samples
+    :param n_samples:  number < N
+    :return:  smaller arrays to plot
+    """
+    bin_size = int(chan_data[0].size / n_samples)
+    margin = chan_data[0].size % bin_size
+    return [np.array_split(samples[:-margin]) for samples in chan_data]
+
+
+def _draw_intervals(axis, intervals):
+    ylim = axis.get_ylim()
+
+    y_height = float(np.max(np.abs(ylim)))
+    boxes = [Rectangle((start + stop) / 2, 3, stop - start, y_height) for start, stop in intervals]
+    pc = PatchCollection(boxes, facecolor=[30, 255, 40], alpha=0.4, edgecolor=[0, 0, 0])
+    axis.add(pc)
 
 
 class StretchyWave(object):
     EXTENSIONS = ['.wav', '.mp3', '.ogg', '.m4a']
 
-    def __init__(self, filename, plot_params=None):
-        self._plot_params = plot_params if plot_params is not None else {'delay_len_sec': 0.0, 'plot_len_sec': 0.0}
+    def __init__(self, filename):
         self._in_stem = os.path.splitext(filename)[0]
         self._read(filename)
-        if self._plot_params['plot_len_sec'] > 0:
-            self._plot_axes = plt.subplots(self.get_nchannels(), 1, sharex='all')[1]
-        self._plot(self._data, 1.0, 'o')
 
-    def _plot(self, data, stretch_factor, pchr='.'):
-        if self._plot_params['plot_len_sec'] == 0.0:
-            return
+    def _clean(self, samples, plot_resample_n=4000, **kwargs):
+        """
+        :param samples: list of numpy arrays of samples (1 per channel)
+        :param plot_resample_n:  Resample waveforms to speed up plot (or, 0 for don't plot)
+        :param kwargs:  params for librosa.effects.split
+        :return: sounds with silent stretches removed
+        """
+        n_chan = len(self._data)
+        segments = librosa.effects.split(np.array(self._data), **kwargs)
+        print("Found %i intervals of non-silence." % (segments.shape[0],))
 
-        n_chan = len(data)
-        times = np.linspace(0, self._wav_params.nframes / float(self._wav_params.framerate), data[0].size)
+        if plot_resample_n > 0:
+            plot_axes = plt.subplots(self.get_nchannels(), 1, sharex='all')[1]
+            plot_data = _resample(self._data, plot_resample_n)
+            resample_factor = float(plot_data[0].size) / self._data[0].size
+            intervals_resampled = segments * resample_factor
+            # plot_times = np.linspace(0, self._wav_params.nframes / float(self._wav_params.framerate), plot_resample_n)
 
-        delay_samples = int(self._plot_params['delay_len_sec'] * self._wav_params.framerate * stretch_factor)
-        plot_samples = int(self._plot_params['plot_len_sec'] * self._wav_params.framerate * stretch_factor)
+            for i_chan in range(n_chan):
+                plot_axes[i_chan].plot(plot_data[i_chan], '.')
+                _draw_intervals(plot_axes[i_chan], intervals_resampled)
 
-        times = times[delay_samples:delay_samples + plot_samples]
+        plt.show()
 
-        print("Plotting %i samples, from %.5f to %.5f" % (len(times), times[0], times[-1]))
-        for i_chan in range(n_chan):
-            plot_data = data[i_chan][delay_samples:delay_samples + plot_samples]
-            self._plot_axes[i_chan].plot(times, plot_data, pchr)
 
     def _read(self, filename):
         ext = os.path.splitext(filename)[1].lower()
@@ -121,9 +150,7 @@ class StretchyWave(object):
 
 
 def run(args):
-    plot_params = {'delay_len_sec': args.delay_plot,
-                   'plot_len_sec': args.plot}
-    sw = StretchyWave(args.filename, plot_params)
+    sw = StretchyWave(args.filename)
     sw.save_slowed(args.factor)
 
     if args.plot > 0.:
@@ -144,7 +171,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Slow down sound (time & frequencies) by desired factor.")
     parser.add_argument("filename", help="Input sound file, one of:  %s." % (StretchyWave.EXTENSIONS,), type=str)
     parser.add_argument("--factor", "-f", help="Slow down by this much.", type=float, default=4.0)
-    parser.add_argument("--plot", "-p", help="Plot this many seconds of the data.", type=float, default=0.0)
-    parser.add_argument("--delay_plot", "-d", help="Skip this much time before plot.", type=float, default=5.0)
+    parser.add_argument("--plot", "-p", help="Plot waveforms.", type=bool, action='store_true')
+    parser.add_argument("--clean_db", "-c", help="DB threshold for silence removal (0 for None).", type=float,
+                        default=60.0)
     parsed = parser.parse_args()
     run(parsed)
