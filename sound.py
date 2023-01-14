@@ -51,7 +51,7 @@ def _convert_from_bytes(data, wav_params):
     elif wav_params.sampwidth == 2:
         n_data = np.frombuffer(data, dtype=np.int16)
     elif wav_params.sampwidth == 4:
-        n_data = np.frombuffer(data, dtype=np.float32)
+        n_data = np.frombuffer(data, dtype=np.int32)
     else:
         raise Exception("Unknown sample width:  %i bytes" % (wav_params.samplewidth,))
 
