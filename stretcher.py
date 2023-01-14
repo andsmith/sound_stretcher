@@ -6,6 +6,8 @@ import logging
 from tkinter import filedialog
 import tkinter as tk
 from sound import read_sound
+from segmentation import SimpleSegmentation
+from util import get_interval_compliment
 import os
 
 CURSOR_ALPHA = 200
@@ -45,14 +47,20 @@ class StretchApp(object):
         self._filename = None
         self._win_name = "Sound Stretcher / Player"
         self._refresh_delay = 1. / 30.
-        self._s = 1.0
+
         self._size = 1000, 600
         self._shutdown = False
         self._mouse_pos = None
 
+        # controls
+        self._stretch_factor = 1.0
+        self._noise_threshold = 5.0
+        self._margin_dur_sec = 0.2
+
         self._data = None
         self._metadata = None  # wave params
         self._duration_sec = None  # unstretched
+        self._segmentor = None
         self._segments = None  # (start, stop) pairs of indices into self._data
         self._image = None
 
@@ -94,11 +102,17 @@ class StretchApp(object):
             self._data = np.mean(self._data, axis=0)
         else:
             self._data = self._data[0]  # de-list
-        self._segments = self._get_segmentation()
+
+        self._segmentor = SimpleSegmentation(self._data, self._metadata)
+        self._segments = None  # reset to recalculate
         self._image = self._get_background()
 
     def _get_background(self):
         audio_mean = np.mean(self._data)
+
+        if self._segments is None:
+            margin_samples = int(self._metadata.framerate * self._margin_dur_sec)
+            self._segments = self._segmentor.get_partitioning(self._noise_threshold, margin_samples)
 
         # bin audio into number of horizontal pixels, get max & min for each one
         bin_size = int(self._data.size / self._size[0])
@@ -126,12 +140,13 @@ class StretchApp(object):
         return image
 
     def _get_segmentation(self):
+
         return [(0, int(self._data.size / 2))]  # first half, stub
 
     def _start_playback(self, begin_pos_rel=0.):
         begin_index = int(begin_pos_rel * self._data.size)
         begin_time = begin_pos_rel * self._duration_sec
-        logging.info("Beginning playback at %.2f seconds, at stretch factor %.2f." % (begin_time, self._s))
+        logging.info("Beginning playback at %.2f seconds, at stretch factor %.2f." % (begin_time, self._stretch_factor))
         # see if in a segment or between them
 
         # starts_before = np.array([seg[0] <= begin_index for seg in self._segments])
@@ -196,29 +211,6 @@ def _draw_v_line(image, x, width, color):
         image[:, x_coords[0]:x_coords[1], :] = np.uint8(new_line)
     else:
         image[:, x_coords[0]:x_coords[1], :] = color
-
-
-def get_interval_compliment(intervals, max_val):
-    """
-    Get minimal intervals whose union with input is whole range
-    (For ints)
-    :param intervals:  list of pairs (low, high) of intervals, in order,
-    :return:  list of anti_interval pairs, so union of interval list with anti_interval list is (0, max_val)
-    """
-    if len(intervals) == 0:
-        anti_intervals = [(0, max_val)]
-    else:
-        anti_intervals = []
-        if intervals[0][0] > 0:
-            anti_intervals = [(0, intervals[0][0])]
-        for seg_i, segment in enumerate(intervals):
-            if seg_i < len(intervals) - 1:
-                #  anti-interval starts at end of this interval, ends at beginning of next
-                anti_intervals.append((segment[1], intervals[seg_i + 1][0]))
-
-            else:
-                anti_intervals.append((segment[1], max_val))
-    return anti_intervals
 
 
 if __name__ == "__main__":

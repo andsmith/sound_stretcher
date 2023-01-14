@@ -23,7 +23,7 @@ They sound like dinosaurs!
 ### Details
 
 File Types:
- * input: `wav`, `mp3`, `m4a`, `ogg`  (all but wav require ffmpeg to convert)
+ * input: `wav`, `mp3`, `m4a`, `ogg`  (all but wav require ffmpeg to convert, For windows, look here:  https://phoenixnap.com/kb/ffmpeg-windows)
  * output:  `wav`
 
 Example:
