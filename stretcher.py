@@ -9,6 +9,7 @@ from sound import read_sound
 from segmentation import SimpleSegmentation
 from util import get_interval_compliment
 import os
+from sound import SoundPlayer
 
 CURSOR_ALPHA = 200
 
@@ -64,6 +65,8 @@ class StretchApp(object):
         self._segments = None  # (start, stop) pairs of indices into self._data
         self._image = None
 
+        self._audio = None
+
         self._tkroot = tk.Tk()
         self._tkroot.withdraw()  # use cv2 window as main window
 
@@ -80,14 +83,26 @@ class StretchApp(object):
                          cv2.EVENT_RBUTTONDOWN]:
                 self._load_file()
 
-        elif self._state == StretchAppStates.idle or self._state == StretchAppStates.playing:
+        else:
+
             if event == cv2.EVENT_RBUTTONUP:
+
                 self._load_file()
             elif event == cv2.EVENT_LBUTTONUP:
-                x_frac = float(x) / self._size[0]
-                self._start_playback(x_frac)
+                if self._state == StretchAppStates.idle:
+                    self._state = StretchAppStates.playing
+                    x_frac = float(x) / self._size[0]
+                    self._start_playback(x_frac)
+                else:
+                    self._state = StretchAppStates.idle
+                    self._stop_playback()
+
+    def _stop_playback(self):
+        self._audio.stop_playback()
+
 
     def _load_file(self):
+        # get file
         filename = filedialog.askopenfilename(initialdir=os.getcwd())
         if filename is None or len(filename) == 0:
             logging.info("Not loading new sound.")
@@ -95,6 +110,7 @@ class StretchApp(object):
         self._state = StretchAppStates.idle
         logging.info("Reading sound file:  %s" % (filename,))
 
+        # read file
         self._data, self._metadata = read_sound(filename)
         self._duration_sec = self._metadata.nframes / float(self._metadata.framerate)
         if self._metadata.nchannels > 1:
@@ -103,9 +119,20 @@ class StretchApp(object):
         else:
             self._data = self._data[0]  # de-list
 
+        # init data
         self._segmentor = SimpleSegmentation(self._data, self._metadata)
-        self._segments = None  # reset to recalculate
+        self._segments = None  # reset to recalculate when needed
         self._image = self._get_background()
+
+        # init audio
+        self._audio = SoundPlayer(self._metadata.sampwidth,
+                                  self._metadata.framerate,
+                                  self._metadata.nchannels,
+                                  self._get_playback_samples)
+
+    def _get_playback_samples(self, n_samples):
+
+
 
     def _get_background(self):
         audio_mean = np.mean(self._data)
@@ -148,7 +175,7 @@ class StretchApp(object):
         begin_time = begin_pos_rel * self._duration_sec
         logging.info("Beginning playback at %.2f seconds, at stretch factor %.2f." % (begin_time, self._stretch_factor))
         # see if in a segment or between them
-
+startm working here
         # starts_before = np.array([seg[0] <= begin_index for seg in self._segments])
         # contains = np.array([seg[0] <= begin_index < seg[1] for seg in self._segments])
 

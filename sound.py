@@ -1,12 +1,56 @@
 import numpy as np
 import sys
 import os
-import wave
-from scipy.interpolate import interp1d
-import argparse
 import subprocess
 import tempfile
 import logging
+
+import wave
+import time
+import pyaudio
+
+
+class SoundPlayer(object):
+    def __init__(self, sample_width, frame_rate, channels, sample_generator):
+        """
+        Open stream for playing.
+        :param sample_width:  bytes per frame
+        :param channels: 1 or 2
+        :param rate:  frame rate (e.g. 44100)
+        """
+        self._sample_width = sample_width
+        self._frame_rate = frame_rate
+        self._channels = channels
+        self._sample_gen = sample_generator
+        self._p = pyaudio.PyAudio()
+        self._stream = None
+
+    def start_playback(self):
+        self._stream = self._p.open(format=self._p.get_format_from_width(self._sample_width),
+                                    channels=self._channels,
+                                    rate=self._frame_rate,
+                                    output=True,
+                                    stream_callback=self._get_samples)
+
+    def _get_samples(self, in_data, frame_count, time_info, status):
+        data = self._sample_gen(frame_count)
+        # If len(data) is less than requested frame_count, PyAudio automatically
+        # assumes the stream is finished, and the stream stops.
+
+        code = pyaudio.paContinue
+        if len(data) < frame_count:
+            self._stream = False
+            code = pyaudio.paComplete
+
+        return data, code
+
+    def stop_playback(self):
+        self._stream.close()
+        self._stream = None
+
+    def shutdown(self):
+        self._p.terminate()
+
 
 EXTENSIONS = ['.m4a', '.ogg', '.mp3']
 
@@ -59,6 +103,7 @@ def _convert_from_bytes(data, wav_params):
     n_data = [n_data[offset::wav_params.nchannels] for offset in range(wav_params.nchannels)]
 
     return n_data
+
 
 '''
 
