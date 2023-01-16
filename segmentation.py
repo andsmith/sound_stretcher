@@ -81,6 +81,8 @@ class SimpleSegmentation(object):
 
         segments = compact_intervals(segments, self._data.size)
         logging.info("  ... with margins & compacted, %i segments." % (len(segments)))
+        for ind, (start,stop) in enumerate(segments):
+            logging.info("\t\t%i:\t%i\t%i" % (ind, start, stop))
         stops = np.array([seg[1] for seg in segments])
         starts = np.array([seg[0] for seg in segments])
         start_times = starts.astype(np.float64) / self._info.framerate

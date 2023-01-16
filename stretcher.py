@@ -42,14 +42,13 @@ class StretchAppStates(IntEnum):
     idle = 2
 
 
-SOUND_BUFFER_SIZE = 2048  # approx 50 ms
+SOUND_BUFFER_SIZE = 1024*8
 
 
 class StretchApp(object):
 
     def __init__(self, ):
         self._state = StretchAppStates.init
-        self._cur_playback_time_sec = 0.0
         self._filename = None
         self._win_name = "Sound Stretcher / Player"
         self._refresh_delay = 1. / 30.
@@ -58,10 +57,11 @@ class StretchApp(object):
         self._shutdown = False
         self._mouse_pos = None
 
-        # controls
-        self._set_stretch(1.0)
-        self._noise_threshold = 5.0
+        self._samples = []
 
+        # controls
+        self._noise_threshold = 5.0
+        self._stretch_factor = 1.0
         self._margin_dur_sec = 0.2
 
         self._data = None  # waveform
@@ -139,8 +139,9 @@ class StretchApp(object):
         # init data
         self._segmentor = SimpleSegmentation(self._data, self._metadata)
         self._resegment()
+        self._set_stretch()
         self._image = self._get_background()
-        time_indices = np.linspace(0, 1.0, self._metadata.nframes)
+        time_indices = np.linspace(0, self._duration_sec, self._metadata.nframes+1)[:-1]
         self._interp = interp1d(time_indices, self._data)
 
         # init audio
@@ -149,14 +150,16 @@ class StretchApp(object):
         self._audio = SoundPlayer(self._metadata.sampwidth,
                                   self._metadata.framerate,
                                   self._metadata.nchannels,
-                                  self._get_playback_samples)
+                                  self._get_playback_samples,
+                                  frames_per_buffer=SOUND_BUFFER_SIZE)
 
-    def _set_stretch(self, new_factor):
+    def _set_stretch(self, new_factor=None):
         """
         Change stretch factor for UI.
+        Call whenever these change:  stretch factor, sound file
         """
-        self._stretch_factor = new_factor
-        self._buffer_duration = float(SOUND_BUFFER_SIZE) / self._metadata.framerate / new_factor
+        self._stretch_factor = new_factor if new_factor is not None else self._stretch_factor
+        self._buffer_duration = float(SOUND_BUFFER_SIZE) / self._metadata.framerate / self._stretch_factor
 
         # generic timestamps for the next buffer of sound, spaced for interpolation
         self._stretched_timestamps = np.linspace(0.0, self._buffer_duration, SOUND_BUFFER_SIZE + 1)[:-1]
@@ -215,6 +218,9 @@ class StretchApp(object):
         If not currently in a sound segment, skip to the start of the next one
         :param n_samples:  Interpolated/spliced sound data
         """
+        if n_samples != SOUND_BUFFER_SIZE:
+            logging.warn("Getting %i samples instead of %i." % (n_samples,SOUND_BUFFER_SIZE))
+        #import ipdb; ipdb.set_trace()
         n_segs_starting_before = np.sum(self._segments['starts'] < self._next_frame_index)
         n_segs_stopping_before = np.sum(self._segments['stops'] < self._next_frame_index)
         if n_segs_starting_before == n_segs_stopping_before:
@@ -224,8 +230,9 @@ class StretchApp(object):
                 self._state = StretchAppStates.idle
                 return self._data[:2] * 0  # signal end
             else:
+                logging.info("Skipping ahead to segment %i, (%i -> %i)" % (seg_ind, self._next_frame_index,
+                                                                           self._segments['starts'][seg_ind]))
                 self._next_frame_index = self._segments['starts'][seg_ind]
-                logging.info("Skipping ahead to %i" % (self._next_frame_index,))
 
         start_timestamp = float(self._next_frame_index) / self._metadata.framerate
         stop_timestamp = start_timestamp + self._buffer_duration
@@ -235,10 +242,11 @@ class StretchApp(object):
             stop_timestamp = self._duration_sec  # out of data, inside segment
             buffer_size = (stop_timestamp - start_timestamp) * self._metadata.framerate * self._stretch_factor
         else:
-            buffer_size = SOUND_BUFFER_SIZE
+            buffer_size = n_samples
 
-        samples = self._interp(self._stretched_timestamps[:buffer_size] + self._next_frame_index)
+        samples = self._interp(self._stretched_timestamps[:buffer_size] + start_timestamp)
         self._next_frame_index += buffer_size
+        self._samples.append(samples)
         return samples
 
     def _run(self):
@@ -257,10 +265,15 @@ class StretchApp(object):
             if remaining_wait > 0:
                 time.sleep(remaining_wait)
 
-            cv2.imshow(self._win_name, frame[:, :, 2::-1])
+            cv2.imshow(self._win_name, frame[:, :, 2::-1].copy())
             k = cv2.waitKey(1)
             if k & 0xff == ord('q'):
                 self._shutdown = True
+
+        samples = np.concatenate(self._samples)
+        print(samples.shape)
+        import matplotlib.pyplot as plt
+        plt.plot(samples);plt.show()
 
     def _make_frame(self):
 
@@ -273,7 +286,8 @@ class StretchApp(object):
             _draw_v_line(frame, mouse_line_x, CURSOR_WIDTH, Layout.get_color('mouse_cursor'))
 
         if self._state == StretchAppStates.playing:
-            playback_line_x = int(self._cur_playback_time_sec / self._duration_sec * self._size[0])
+            playback_line_x = int(float(self._next_frame_index) / self._metadata.nframes * self._size[0])
+            #print("LINE %i" % (playback_line_x,))
             _draw_v_line(frame, playback_line_x, CURSOR_WIDTH, Layout.get_color('playback_cursor'))
         return frame
 
