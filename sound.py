@@ -11,7 +11,7 @@ import pyaudio
 
 
 class SoundPlayer(object):
-    def __init__(self, sample_width, frame_rate, channels, sample_generator):
+    def __init__(self, sample_width, frame_rate, channels, sample_generator, frames_per_buffer=1048):
         """
         Open stream for playing.
         :param sample_width:  bytes per frame
@@ -23,13 +23,16 @@ class SoundPlayer(object):
         self._channels = channels
         self._sample_gen = sample_generator
         self._p = pyaudio.PyAudio()
+        self._buffer_size = frames_per_buffer
         self._stream = None
 
-    def start_playback(self):
+    def start(self):
+        logging.info("Starting playback...")
         self._stream = self._p.open(format=self._p.get_format_from_width(self._sample_width),
                                     channels=self._channels,
                                     rate=self._frame_rate,
                                     output=True,
+                                    frames_per_buffer = self._buffer_size,
                                     stream_callback=self._get_samples)
 
     def _get_samples(self, in_data, frame_count, time_info, status):
@@ -44,7 +47,7 @@ class SoundPlayer(object):
 
         return data, code
 
-    def stop_playback(self):
+    def stop(self):
         self._stream.close()
         self._stream = None
 
@@ -81,9 +84,9 @@ def _read_other(filename):
     with tempfile.TemporaryDirectory() as temp_dir:
         in_stem = os.path.splitext(filename)[0]
         temp_wav = os.path.join(temp_dir, "%s.wav" % (in_stem,))
-        print("Converting:  %s  -->  %s" % (filename, temp_wav))
+        logging.info("Converting:  %s  -->  %s" % (filename, temp_wav))
         cmd = ['ffmpeg', '-i', filename, temp_wav]
-        print("Running:  %s" % (" ".join(cmd)))
+        logging.info("Running:  %s" % (" ".join(cmd)))
         _ = subprocess.run(cmd, capture_output=True)
         return _read_wav(temp_wav)
 

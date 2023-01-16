@@ -50,7 +50,9 @@ class SimpleSegmentation(object):
 
         :param factor: "noise" is anything less than this much times the prototype noise level
         :param margin_samples:  Keep this many samples on either side of partitions.
-        :return:  list of intervals into data containing sound
+        :return:  dict('intervals': list of intervals into data, the segments containing sound,
+                       'starts':  numpy array of the first index of each segment
+                       'stop': numpy array of the last index of each segment}
         """
         n_seg = self._stats.size
 
@@ -78,13 +80,22 @@ class SimpleSegmentation(object):
         logging.info("Sound file has %i segments, with noise-threshold %.2f" % (len(segments), factor))
 
         segments = compact_intervals(segments, self._data.size)
-        logging.info("  ... with margins & compactifying, %i segments." % (len(segments)))
-
-        return segments
+        logging.info("  ... with margins & compacted, %i segments." % (len(segments)))
+        stops = np.array([seg[1] for seg in segments])
+        starts = np.array([seg[0] for seg in segments])
+        start_times = starts.astype(np.float64) / self._info.framerate
+        stop_times = stops.astype(np.float64) / self._info.framerate
+        return {'intervals': segments,
+                'starts': starts,
+                'stops': stops,
+                'start_times': start_times,
+                'stop_times': stop_times}
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     test_data, test_meta = read_sound('Mimus_longicaudatus_-_Long_tailed_Mockingbird.wav')
+    import pprint
+    pprint.pprint(test_meta)
     segs=SimpleSegmentation(test_data[0], test_meta)
     print(segs.get_partitioning(factor=2.0, margin_samples = int(test_meta.framerate * 0.1)))
