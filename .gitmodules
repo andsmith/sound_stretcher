@@ -1,3 +1,0 @@
-[submodule "gui_utils"]
-	path = gui_utils
-	url = git@github.com:andsmith/gui_utils
