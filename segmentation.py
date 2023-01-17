@@ -3,7 +3,7 @@ Separate audio foreground / noise
 """
 import logging
 import numpy as np
-from sound import read_sound
+from sound import Sound
 from util import compact_intervals
 
 
@@ -14,12 +14,12 @@ class SimpleSegmentation(object):
     Return segmentations based on thresholding at this noise level
     """
 
-    def __init__(self, data, metadata, noise_percentile=0.05, chunk_dur_sec=0.05):
+    def __init__(self, sound, noise_percentile=0.05, chunk_dur_sec=0.05):
         self._noice_pct = noise_percentile
         self._chunk_dur = chunk_dur_sec
-        self._chunk_size = int(metadata.framerate * chunk_dur_sec)
-        self._info = metadata
-        self._data = data
+        self._chunk_size = int(sound.metadata.framerate * chunk_dur_sec)
+        self._sound = sound
+
         self._analyze()
 
     def _analyze(self):
@@ -27,8 +27,9 @@ class SimpleSegmentation(object):
         Break data into chunks, find "noisy" ones
         """
         # partition data
-        n_chunks = int(self._data.size / self._chunk_size)
-        self._chunks = self._data[:n_chunks * self._chunk_size].reshape(n_chunks, self._chunk_size)
+        data = self._sound.get_mono_data()
+        n_chunks = int(data.size / self._chunk_size)
+        self._chunks = data[:n_chunks * self._chunk_size].reshape(n_chunks, self._chunk_size)
 
         # find noise prototype
         means = np.mean(self._chunks, axis=1, keepdims=True)
@@ -79,14 +80,14 @@ class SimpleSegmentation(object):
                       c_seg[1] * self._chunk_size + margin_samples) for c_seg in chunk_segments]
         logging.info("Sound file has %i segments, with noise-threshold %.2f" % (len(segments), factor))
 
-        segments = compact_intervals(segments, self._data.size)
+        segments = compact_intervals(segments, self._sound.metadata.nframes)
         logging.info("  ... with margins & compacted, %i segments." % (len(segments)))
         for ind, (start,stop) in enumerate(segments):
             logging.info("\t\t%i:\t%i\t%i" % (ind, start, stop))
         stops = np.array([seg[1] for seg in segments])
         starts = np.array([seg[0] for seg in segments])
-        start_times = starts.astype(np.float64) / self._info.framerate
-        stop_times = stops.astype(np.float64) / self._info.framerate
+        start_times = starts.astype(np.float64) / self._sound.metadata.framerate
+        stop_times = stops.astype(np.float64) / self._sound.metadata.framerate
         return {'intervals': segments,
                 'starts': starts,
                 'stops': stops,
@@ -96,8 +97,8 @@ class SimpleSegmentation(object):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    test_data, test_meta = read_sound('Mimus_longicaudatus_-_Long_tailed_Mockingbird.wav')
+    test_sound = Sound('Aphelocoma_californica_Sound_2014-08-12.wav')
     import pprint
-    pprint.pprint(test_meta)
-    segs=SimpleSegmentation(test_data[0], test_meta)
-    print(segs.get_partitioning(factor=2.0, margin_samples = int(test_meta.framerate * 0.1)))
+    pprint.pprint(test_sound.metadata)
+    segs=SimpleSegmentation(test_sound)
+    print(segs.get_partitioning(factor=2.0, margin_samples = int(test_sound.metadata.framerate * 0.1)))

@@ -77,7 +77,17 @@ class Sound(object):
 
     def __init__(self, filename):
         self._filename = filename
-        self.data, self.metadata = Sound._read_sound(filename)
+        self.data, self.metadata, self.data_raw = Sound._read_sound(filename)
+        self.duration_sec = self.metadata.nframes / float(self.metadata.framerate)
+
+    def get_mono_data(self):
+        """
+        Avg of all channels.
+        :return: numpy array
+        """
+        if len(self.data) == 1:
+            return self.data[0]
+        return np.mean(self.data, axis=1)
 
     def encode_samples(self, samples):
         return Sound._convert_to_bytes(samples, self.data[0].dtype)
@@ -96,13 +106,16 @@ class Sound(object):
     def _read_wav(filename):
         with wave.open(filename, 'rb') as wav:
             wav_params = wav.getparams()
-            data = wav.readframes(wav_params.nframes)
-        data = Sound._convert_from_bytes(data, wav_params)
+            data_raw = wav.readframes(wav_params.nframes)
+        data = Sound._convert_from_bytes(data_raw, wav_params)
         duration = wav_params.nframes / float(wav_params.framerate)
         logging.info("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
                                                                           wav_params.framerate,
                                                                           wav_params.nchannels))
-        return data, wav_params
+        logging.info("Data is %i (%s)" % (data[0].size, data[0].dtype))
+        logging.info("raw data is %i (%s)" % (len(data_raw), type(data_raw)))
+
+        return data, wav_params, data_raw
 
     @staticmethod
     def _read_other(filename):
