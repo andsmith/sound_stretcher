@@ -81,7 +81,7 @@ class StretchApp(object):
 
     def _mouse(self, event, x, y, flags, param):
         """
-        CV2 mouse callback.  App state changes happen here & when sound finishes.
+        CV2 mouse callback.  App state changes happen here & when sound finishes.  (hotkeys?)
         """
         if event == cv2.EVENT_MOUSEMOVE:
             self._mouse_pos = x, y
@@ -198,6 +198,7 @@ class StretchApp(object):
         :param begin_pos_rel:  Where to start, float in [0, 1]
         """
         self._next_frame_index = int(begin_pos_rel * self._sound.metadata.nframes)
+        self._start_ind = self._next_frame_index
         begin_time = begin_pos_rel * self._sound.duration_sec
         logging.info("Beginning playback at %.2f seconds, at stretch factor %.2f." % (begin_time, self._stretch_factor))
 
@@ -215,9 +216,10 @@ class StretchApp(object):
             endpoint = self._sound.metadata.nframes
             logging.info("Sound finished, outside sound segment.")
             self._state = StretchAppStates.idle
-        nc= self._sound.metadata.nchannels
-        samples = self._sound.data_raw[nc*self._next_frame_index:(nc*endpoint)]
+        nc = self._sound.metadata.sampwidth
+        samples = self._sound.data_raw[nc * self._next_frame_index:nc *(self._next_frame_index+endpoint)]
         self._next_frame_index = endpoint
+
 
         return samples
 
@@ -270,9 +272,11 @@ class StretchApp(object):
 
             cv2.imshow(self._win_name, frame[:, :, 2::-1].copy())
             k = cv2.waitKey(1)
-            if k & 0xff == ord('q'):
-                self._shutdown = True
+            self._keyboard(k)
 
+    def _keyboard(self, k):
+        if k & 0xff == ord('q'):
+            self._shutdown = True
 
     def _make_frame(self):
 
