@@ -42,7 +42,7 @@ class StretchAppStates(IntEnum):
     idle = 2
 
 
-SOUND_BUFFER_SIZE = 1024*8
+SOUND_BUFFER_SIZE = 1024 * 2
 
 
 class StretchApp(object):
@@ -116,7 +116,7 @@ class StretchApp(object):
                     self._stop_playback()
 
     def _stop_playback(self):
-        self._audio.stop_playback()
+        self._audio.stop()
 
     def _load_file(self):
         # get file
@@ -141,7 +141,7 @@ class StretchApp(object):
         self._resegment()
         self._set_stretch()
         self._image = self._get_background()
-        time_indices = np.linspace(0, self._duration_sec, self._metadata.nframes+1)[:-1]
+        time_indices = np.linspace(0, self._duration_sec, self._metadata.nframes + 1)[:-1]
         self._interp = interp1d(time_indices, self._data)
 
         # init audio
@@ -212,15 +212,28 @@ class StretchApp(object):
         logging.info("Beginning playback at %.2f seconds, at stretch factor %.2f." % (begin_time, self._stretch_factor))
 
         self._audio.start()
+
     def _get_playback_samples(self, n_samples):
         """
         Generate next sound buffer.
         If not currently in a sound segment, skip to the start of the next one
         :param n_samples:  Interpolated/spliced sound data
         """
+
+        endpoint = self._next_frame_index + n_samples
+        if endpoint > self._data.size:
+            endpoint = self._data.size
+            logging.info("Sound finished, outside sound segment.")
+            self._state = StretchAppStates.idle
+        samples = self._data[self._next_frame_index:endpoint]
+        self._next_frame_index = endpoint
+        self._samples.append(samples)
+
+        return samples
+
         if n_samples != SOUND_BUFFER_SIZE:
-            logging.warn("Getting %i samples instead of %i." % (n_samples,SOUND_BUFFER_SIZE))
-        #import ipdb; ipdb.set_trace()
+            logging.warn("Getting %i samples instead of %i." % (n_samples, SOUND_BUFFER_SIZE))
+        # import ipdb; ipdb.set_trace()
         n_segs_starting_before = np.sum(self._segments['starts'] < self._next_frame_index)
         n_segs_stopping_before = np.sum(self._segments['stops'] < self._next_frame_index)
         if n_segs_starting_before == n_segs_stopping_before:
@@ -273,7 +286,8 @@ class StretchApp(object):
         samples = np.concatenate(self._samples)
         print(samples.shape)
         import matplotlib.pyplot as plt
-        plt.plot(samples);plt.show()
+        plt.plot(samples);
+        plt.show()
 
     def _make_frame(self):
 
@@ -287,7 +301,7 @@ class StretchApp(object):
 
         if self._state == StretchAppStates.playing:
             playback_line_x = int(float(self._next_frame_index) / self._metadata.nframes * self._size[0])
-            #print("LINE %i" % (playback_line_x,))
+            # print("LINE %i" % (playback_line_x,))
             _draw_v_line(frame, playback_line_x, CURSOR_WIDTH, Layout.get_color('playback_cursor'))
         return frame
 

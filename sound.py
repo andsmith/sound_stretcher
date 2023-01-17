@@ -11,7 +11,7 @@ import pyaudio
 
 
 class SoundPlayer(object):
-    def __init__(self, sample_width, frame_rate, channels, sample_generator, frames_per_buffer=1048):
+    def __init__(self, sample_width, frame_rate, channels, sample_generator, frames_per_buffer=None):
         """
         Open stream for playing.
         :param sample_width:  bytes per frame
@@ -23,8 +23,22 @@ class SoundPlayer(object):
         self._channels = channels
         self._sample_gen = sample_generator
         self._p = pyaudio.PyAudio()
-        self._buffer_size = frames_per_buffer
+        self._buffer_size = frames_per_buffer if frames_per_buffer is not None else 1024 * 2
         self._stream = None
+
+    @staticmethod
+    def from_sound(sound, sample_generator, frames_per_buffer=None):
+        """
+        Init with params loaded from file.
+        :param sound: Sound object
+        :param sample_generator:  see __init__
+        :param frames_per_buffer:  see __init
+        :return: SoundPlayer
+        """
+        return SoundPlayer(sample_width=sound.metadata.sampwidth,
+                           frame_rate=sound.metadata.framerate,
+                           channels=sound.metadata.nchannels,
+                           sample_generator=sample_generator, frames_per_buffer=frames_per_buffer)
 
     def start(self):
         logging.info("Starting playback...")
@@ -32,7 +46,7 @@ class SoundPlayer(object):
                                     channels=self._channels,
                                     rate=self._frame_rate,
                                     output=True,
-                                    frames_per_buffer = self._buffer_size,
+                                    frames_per_buffer=self._buffer_size,
                                     stream_callback=self._get_samples)
 
     def _get_samples(self, in_data, frame_count, time_info, status):
@@ -55,57 +69,78 @@ class SoundPlayer(object):
         self._p.terminate()
 
 
-EXTENSIONS = ['.m4a', '.ogg', '.mp3']
+class Sound(object):
+    """
+    Class to hold data from a sound file
+    """
+    EXTENSIONS = ['.m4a', '.ogg', '.mp3']
 
+    def __init__(self, filename):
+        self._filename = filename
+        self.data, self.metadata = Sound._read_sound(filename)
 
-def read_sound(filename):
-    ext = os.path.splitext(filename)[1].lower()
-    if ext == '.wav':
-        return _read_wav(filename)
-    elif ext in EXTENSIONS:
-        return _read_other(filename)
-    else:
-        raise Exception("unknown file type, not one of %s:  %s" % (EXTENSIONS, ext))
+    def encode_samples(self, samples):
+        return Sound._convert_to_bytes(samples, self.data[0].dtype)
 
+    @staticmethod
+    def _read_sound(filename):
+        ext = os.path.splitext(filename)[1].lower()
+        if ext == '.wav':
+            return Sound._read_wav(filename)
+        elif ext in Sound.EXTENSIONS:
+            return Sound._read_other(filename)
+        else:
+            raise Exception("unknown file type, not one of %s:  %s" % (Sound.EXTENSIONS, ext))
 
-def _read_wav(filename):
-    with wave.open(filename, 'rb') as wav:
-        wav_params = wav.getparams()
-        data = wav.readframes(wav_params.nframes)
-    data = _convert_from_bytes(data, wav_params)
-    duration = wav_params.nframes / float(wav_params.framerate)
-    logging.info("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
-                                                                      wav_params.framerate,
-                                                                      wav_params.nchannels))
-    return data, wav_params
+    @staticmethod
+    def _read_wav(filename):
+        with wave.open(filename, 'rb') as wav:
+            wav_params = wav.getparams()
+            data = wav.readframes(wav_params.nframes)
+        data = Sound._convert_from_bytes(data, wav_params)
+        duration = wav_params.nframes / float(wav_params.framerate)
+        logging.info("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
+                                                                          wav_params.framerate,
+                                                                          wav_params.nchannels))
+        return data, wav_params
 
+    @staticmethod
+    def _read_other(filename):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            in_stem = os.path.splitext(filename)[0]
+            temp_wav = os.path.join(temp_dir, "%s.wav" % (in_stem,))
+            logging.info("Converting:  %s  -->  %s" % (filename, temp_wav))
+            cmd = ['ffmpeg', '-i', filename, temp_wav]
+            logging.info("Running:  %s" % (" ".join(cmd)))
+            _ = subprocess.run(cmd, capture_output=True)
+            return Sound._read_wav(temp_wav)
 
-def _read_other(filename):
-    with tempfile.TemporaryDirectory() as temp_dir:
-        in_stem = os.path.splitext(filename)[0]
-        temp_wav = os.path.join(temp_dir, "%s.wav" % (in_stem,))
-        logging.info("Converting:  %s  -->  %s" % (filename, temp_wav))
-        cmd = ['ffmpeg', '-i', filename, temp_wav]
-        logging.info("Running:  %s" % (" ".join(cmd)))
-        _ = subprocess.run(cmd, capture_output=True)
-        return _read_wav(temp_wav)
+    @staticmethod
+    def _convert_from_bytes(data, wav_params):
+        # figure out data type
+        if wav_params.sampwidth == 1:
+            n_data = np.frombuffer(data, dtype=np.uint8)
+        elif wav_params.sampwidth == 2:
+            n_data = np.frombuffer(data, dtype=np.int16)
+        elif wav_params.sampwidth == 4:
+            n_data = np.frombuffer(data, dtype=np.int32)
+        else:
+            raise Exception("Unknown sample width:  %i bytes" % (wav_params.samplewidth,))
 
+        # separate interleaved channel data
+        n_data = [n_data[offset::wav_params.nchannels] for offset in range(wav_params.nchannels)]
 
-def _convert_from_bytes(data, wav_params):
-    # figure out data type
-    if wav_params.sampwidth == 1:
-        n_data = np.frombuffer(data, dtype=np.uint8)
-    elif wav_params.sampwidth == 2:
-        n_data = np.frombuffer(data, dtype=np.int16)
-    elif wav_params.sampwidth == 4:
-        n_data = np.frombuffer(data, dtype=np.int32)
-    else:
-        raise Exception("Unknown sample width:  %i bytes" % (wav_params.samplewidth,))
+        return n_data
 
-    # separate interleaved channel data
-    n_data = [n_data[offset::wav_params.nchannels] for offset in range(wav_params.nchannels)]
+    @staticmethod
+    def _convert_to_bytes(chan_float_data, data_type):
+        # interleave channel data
+        n_chan = len(chan_float_data)
+        data = np.zeros(n_chan * chan_float_data[0].size, dtype=data_type)
+        for i_chan in range(n_chan):
+            data[i_chan::n_chan] = chan_float_data[i_chan]
 
-    return n_data
+        return data.tobytes()
 
 
 '''
@@ -133,14 +168,6 @@ class StretchyWave(object):
         duration = new_params.nframes / float(self._wav_params.framerate)
         print("\tcontains %.4f seconds of audio data." % (duration,))
 
-    def _convert_to_bytes(self, chan_float_data):
-        # interleave channel data
-        n_chan = len(chan_float_data)
-        data = np.zeros(n_chan * chan_float_data[0].size, dtype=self._data[0].dtype)
-        for i_chan in range(n_chan):
-            data[i_chan::n_chan] = chan_float_data[i_chan]
-
-        return data.tobytes()
 
     def get_nchannels(self):
         return self._wav_params.nchannels
