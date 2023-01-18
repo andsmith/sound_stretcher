@@ -154,6 +154,21 @@ class Sound(object):
             data[i_chan::n_chan] = chan_float_data[i_chan]
 
         return data.tobytes()
+    def write_file(self, data, filename):
+        """
+        Create a sound file with given data, using same params as self.
+        :param data:  list of channel data (numpy arrays of samples)
+        :param filename:  to save as
+        :return:  filename
+        """
+        new_bytes = self._convert_to_bytes(data, self.data[0].dtype)
+        new_params = self.metadata._replace(nframes=data[0].size)
+        logging.info("Writing file:  %s" % (filename, ))
+        with wave.open(filename, 'wb') as wav:
+            wav.setparams(new_params)
+            wav.writeframesraw(new_bytes)
+        duration = new_params.nframes / float(self.metadata.framerate)
+        print("\tWrote %.4f seconds of audio data (%i samples)." % (duration,new_params.nframes))
 
 
 '''

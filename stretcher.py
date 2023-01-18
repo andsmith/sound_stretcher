@@ -10,29 +10,9 @@ import os
 
 from sound import Sound, SoundPlayer
 from segmentation import SimpleSegmentation
-from util import get_interval_compliment
-
-CURSOR_ALPHA = 200
-
-COLORS = {'slate': (0x30, 0x36, 0x3d, 255),
-          'off white': (0xf6, 0xee, 0xe5, 255),
-          'sky blue': (85, 206, 255, 255),
-          'gray': (200, 200, 200, 255),
-          'brown': (78, 53, 36, 255),
-          'cursor_green': (0x54, 0x8f, 0x66, 255)}
-CURSOR_WIDTH = 4
-
-
-class Layout(object):
-    COLOR_SCHEME = {'background': COLORS['slate'],
-                    'wave_sound': COLORS['sky blue'],
-                    'wave_noise': COLORS['brown'],
-                    'playback_cursor': COLORS['cursor_green'][:3] + (CURSOR_ALPHA,),
-                    'mouse_cursor': COLORS['gray'][:3] + (CURSOR_ALPHA,)}
-
-    @staticmethod
-    def get_color(name):
-        return np.array(Layout.COLOR_SCHEME[name], dtype=np.uint8)
+from util import get_interval_compliment, make_unique_filename
+from layout import Layout
+from help import HelpDisplay
 
 
 class StretchAppStates(IntEnum):
@@ -50,15 +30,17 @@ class StretchApp(object):
         self._state = StretchAppStates.init
         self._filename = None
         self._win_name = "Sound Stretcher / Player"
-        self._refresh_delay = 1. / 30.
+        self._refresh_delay = 1. / 60.
 
-        self._size = 1000, 600
+        self._size = 1200, 600
         self._shutdown = False
         self._mouse_pos = None
+        self._showing_help=False
+        self._help = HelpDisplay(self._size[::-1])
 
         # controls
         self._noise_threshold = 5.0
-        self._stretch_factor = 1.0
+        self._stretch_factor = 4.
         self._margin_dur_sec = 0.2
 
         self._sound = None  # waveform
@@ -76,6 +58,15 @@ class StretchApp(object):
 
         self._tkroot = tk.Tk()
         self._tkroot.withdraw()  # use cv2 window as main window
+
+        self._start_inds = []
+        self._buffer_sizes = []
+        self._start_times = []
+        self._stop_times = []
+        self._run_stats = {'frame_count': 0,
+                           'start_time': time.perf_counter(),
+                           'update_interval_sec': 5.0,
+                           'idle_t': 0.0}
 
         self._run()
 
@@ -123,7 +114,8 @@ class StretchApp(object):
         logging.info("Reading sound file:  %s" % (filename,))
 
         # read file
-        self._sound = Sound(filename)
+        self._filename = filename
+        self._sound = Sound(self._filename)
 
         # init data
         self._segmentor = SimpleSegmentation(self._sound)
@@ -148,10 +140,11 @@ class StretchApp(object):
         Call whenever these change:  stretch factor, sound file
         """
         self._stretch_factor = new_factor if new_factor is not None else self._stretch_factor
-        self._buffer_duration = float(SOUND_BUFFER_SIZE) / self._sound.metadata.framerate / self._stretch_factor
+        self._stretched_buffer_duration = \
+            float(SOUND_BUFFER_SIZE) / self._sound.metadata.framerate / self._stretch_factor
 
         # generic timestamps for the next buffer of sound, spaced for interpolation
-        self._stretched_timestamps = np.linspace(0.0, self._buffer_duration, SOUND_BUFFER_SIZE + 1)[:-1]
+        self._stretched_timestamps = np.linspace(0.0, self._stretched_buffer_duration, SOUND_BUFFER_SIZE + 1)[:-1]
         self._stretched_dt = self._stretched_timestamps[1] - self._stretched_timestamps[0]
 
     def _resegment(self):
@@ -210,56 +203,57 @@ class StretchApp(object):
         If not currently in a sound segment, skip to the start of the next one
         :param n_samples:  Interpolated/spliced sound data
         """
-
+        '''
         endpoint = self._next_frame_index + n_samples
         if endpoint > self._sound.metadata.nframes:
             endpoint = self._sound.metadata.nframes
-            logging.info("Sound finished, outside sound segment.")
             self._state = StretchAppStates.idle
         nc = self._sound.metadata.sampwidth
-        samples = self._sound.data_raw[nc * self._next_frame_index:nc *(self._next_frame_index+endpoint)]
+        reference_samples = self._sound.data_raw[nc * self._next_frame_index:nc * (self._next_frame_index + endpoint)]
         self._next_frame_index = endpoint
-
-
-        return samples
-
-        if n_samples != SOUND_BUFFER_SIZE:
-            logging.warn("Getting %i samples instead of %i." % (n_samples, SOUND_BUFFER_SIZE))
+        '''
         # import ipdb; ipdb.set_trace()
         n_segs_starting_before = np.sum(self._segments['starts'] < self._next_frame_index)
         n_segs_stopping_before = np.sum(self._segments['stops'] < self._next_frame_index)
         if n_segs_starting_before == n_segs_stopping_before:
             seg_ind = n_segs_stopping_before
             if seg_ind == self._segments['starts'].size:  # out of data, outside segment
-                logging.info("Sound finished, outside sound segment.")
+                logging.info("Sound finished.")
                 self._state = StretchAppStates.idle
-                return self._data[:2] * 0  # signal end
+                return self._sound.data_raw[:2] * 0  # signal end
             else:
                 logging.info("Skipping ahead to segment %i, (%i -> %i)" % (seg_ind, self._next_frame_index,
                                                                            self._segments['starts'][seg_ind]))
                 self._next_frame_index = self._segments['starts'][seg_ind]
 
-        start_timestamp = float(self._next_frame_index) / self._metadata.framerate
-        stop_timestamp = start_timestamp + self._buffer_duration
-        if stop_timestamp > self._duration_sec:
-            logging.info("Sound finished, inside sound segment.")
+        start_timestamp = float(self._next_frame_index) / self._sound.metadata.framerate
+        stop_timestamp = start_timestamp + self._stretched_buffer_duration
 
-            stop_timestamp = self._duration_sec  # out of data, inside segment
-            buffer_size = (stop_timestamp - start_timestamp) * self._metadata.framerate * self._stretch_factor
+        self._start_inds.append(self._next_frame_index)
+        self._start_times.append(start_timestamp)
+        self._stop_times.append(stop_timestamp)
+        if stop_timestamp > self._sound.duration_sec:
+            logging.info("Sound finished, inside sound segment.")
+            stop_timestamp = self._sound.duration_sec  # out of data, inside segment
+            buffer_size = int((stop_timestamp - start_timestamp) / self._stretched_dt)
         else:
             buffer_size = n_samples
+        self._buffer_sizes.append(buffer_size)
 
         samples = [chan_interp(self._stretched_timestamps[:buffer_size] + start_timestamp)
                    for chan_interp in self._interps]
-        self._next_frame_index += buffer_size
-        return samples
+        self._next_frame_index = int(stop_timestamp * self._sound.metadata.framerate) + self._stretched_dt
+
+        samples_encoded = self._sound.encode_samples(samples)
+
+        return samples_encoded
 
     def _run(self):
         cv2.namedWindow(self._win_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self._win_name, self._size)
         cv2.setMouseCallback(self._win_name, self._mouse)
 
-        t_start = time.perf_counter()
+        t_start = time.perf_counter()  # when last frame shown
 
         while not self._shutdown:
 
@@ -268,32 +262,73 @@ class StretchApp(object):
             elapsed = now - t_start
             remaining_wait = self._refresh_delay - elapsed
             if remaining_wait > 0:
+                self._run_stats['idle_t'] += remaining_wait
                 time.sleep(remaining_wait)
 
             cv2.imshow(self._win_name, frame[:, :, 2::-1].copy())
             k = cv2.waitKey(1)
+            t_start = now
+
             self._keyboard(k)
+
+            # stats
+            self._run_stats['frame_count'] += 1
+            now = time.perf_counter()
+
+            duration = now - self._run_stats['start_time']
+            if duration > self._run_stats['update_interval_sec']:
+                frame_rate = self._run_stats['frame_count'] / duration
+                logging.info("Frame rate:  %.2f FPS,  idle:  %.2f %%" % (
+                    frame_rate, 100. * self._run_stats['idle_t'] / duration))
+                self._run_stats['start_time'] = now
+                self._run_stats['idle_t'] = 0.0
+                self._run_stats['frame_count'] = 0
 
     def _keyboard(self, k):
         if k & 0xff == ord('q'):
             self._shutdown = True
+        if k & 0xff == ord('h'):
+            self._showing_help = not self._showing_help
+            logging.info("Toggle help:  %s" % (self._showing_help, ))
+        if k & 0xff == ord('s'):
+            self._save()
+        if k & 0xff == ord('d'):
+            import ipdb
+            ipdb.set_trace()
 
     def _make_frame(self):
 
         if self._state == StretchAppStates.init:
             frame = np.zeros((self._size[1], self._size[0], 4), dtype=np.uint8) + Layout.get_color('background')
+            self._help.add_help(frame)
         else:
             frame = self._image.copy()
         if self._mouse_pos is not None:
             mouse_line_x = self._mouse_pos[0]
-            _draw_v_line(frame, mouse_line_x, CURSOR_WIDTH, Layout.get_color('mouse_cursor'))
+            _draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, Layout.get_color('mouse_cursor'))
 
         if self._state == StretchAppStates.playing:
             playback_line_x = int(float(self._next_frame_index) / self._sound.metadata.nframes * self._size[0])
             # print("LINE %i" % (playback_line_x,))
-            _draw_v_line(frame, playback_line_x, CURSOR_WIDTH, Layout.get_color('playback_cursor'))
+            _draw_v_line(frame, playback_line_x, Layout.CURSOR_WIDTH, Layout.get_color('playback_cursor'))
+
+        if self._showing_help:
+            self._help.add_help(frame)
+
         return frame
 
+    def _save(self):
+        """
+        Write stretched file.
+        """
+        logging.info("Stretching whole sound...")
+        new_time_indices = np.linspace(0, 1.0, int(self._sound.metadata.nframes * self._stretch_factor))
+        new_chan_data = [interpolator(new_time_indices) for interpolator in self._interps]
+        logging.info("\t... done.")
+
+        file_name = os.path.splitext(self._filename)[0]
+        out_filename = make_unique_filename("%s_x%.4f.wav" % (file_name,self._stretch_factor))
+        self._sound.write_file(new_chan_data, out_filename)
 
 def _draw_v_line(image, x, width, color):
     """

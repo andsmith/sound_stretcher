@@ -1,4 +1,6 @@
 import logging
+import os
+
 
 def compact_intervals(ints, max_val):
     """
@@ -54,3 +56,16 @@ def get_interval_compliment(intervals, max_val):
             else:
                 anti_intervals.append((segment[1], max_val))
     return anti_intervals
+
+
+def make_unique_filename(unversioned):
+    if not os.path.exists(unversioned):
+        return unversioned
+    version = 0
+    file_part, ext = os.path.splitext(unversioned)
+    filename = "%s_%i%s" % (file_part, version, ext)
+    while os.path.exists(filename):
+        version += 1
+        filename = "%s_%i%s" % (file_part, version, ext)
+
+    return filename
