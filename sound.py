@@ -4,7 +4,7 @@ import os
 import subprocess
 import tempfile
 import logging
-
+import shutil
 import wave
 import time
 import pyaudio
@@ -112,21 +112,21 @@ class Sound(object):
         logging.info("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
                                                                           wav_params.framerate,
                                                                           wav_params.nchannels))
-        logging.info("Data is %i (%s)" % (data[0].size, data[0].dtype))
-        logging.info("raw data is %i (%s)" % (len(data_raw), type(data_raw)))
 
         return data, wav_params, data_raw
 
     @staticmethod
     def _read_other(filename):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            in_stem = os.path.splitext(filename)[0]
-            temp_wav = os.path.join(temp_dir, "%s.wav" % (in_stem,))
-            logging.info("Converting:  %s  -->  %s" % (filename, temp_wav))
-            cmd = ['ffmpeg', '-i', filename, temp_wav]
-            logging.info("Running:  %s" % (" ".join(cmd)))
-            _ = subprocess.run(cmd, capture_output=True)
-            return Sound._read_wav(temp_wav)
+        temp_dir = tempfile.mkdtemp()
+        in_stem = os.path.split(os.path.splitext(filename)[0])[1]
+        temp_wav = os.path.join(temp_dir, "%s.wav" % (in_stem,))
+        logging.info("Converting:  %s  -->  %s" % (filename, temp_wav))
+        cmd = ['ffmpeg', '-i', filename, temp_wav]
+        logging.info("Running:  %s" % (" ".join(cmd)))
+        _ = subprocess.run(cmd, capture_output=True)
+        sound = Sound._read_wav(temp_wav)
+        shutil.rmtree(temp_dir)
+        return sound
 
     @staticmethod
     def _convert_from_bytes(data, wav_params):
@@ -154,6 +154,7 @@ class Sound(object):
             data[i_chan::n_chan] = chan_float_data[i_chan]
 
         return data.tobytes()
+
     def write_file(self, data, filename):
         """
         Create a sound file with given data, using same params as self.
@@ -163,12 +164,12 @@ class Sound(object):
         """
         new_bytes = self._convert_to_bytes(data, self.data[0].dtype)
         new_params = self.metadata._replace(nframes=data[0].size)
-        logging.info("Writing file:  %s" % (filename, ))
+        logging.info("Writing file:  %s" % (filename,))
         with wave.open(filename, 'wb') as wav:
             wav.setparams(new_params)
             wav.writeframesraw(new_bytes)
         duration = new_params.nframes / float(self.metadata.framerate)
-        print("\tWrote %.4f seconds of audio data (%i samples)." % (duration,new_params.nframes))
+        print("\tWrote %.4f seconds of audio data (%i samples)." % (duration, new_params.nframes))
 
 
 '''
