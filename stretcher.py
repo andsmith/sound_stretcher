@@ -35,7 +35,7 @@ class StretchApp(object):
         self._size = 1200, 600
         self._shutdown = False
         self._mouse_pos = None
-        self._showing_help=False
+        self._showing_help = False
         self._help = HelpDisplay(self._size[::-1])
 
         # controls
@@ -80,19 +80,11 @@ class StretchApp(object):
 
         if self._state == StretchAppStates.init:
 
-            if event in [cv2.EVENT_LBUTTONDOWN,
-                         cv2.EVENT_RBUTTONDOWN]:
+            if event == cv2.EVENT_LBUTTONUP:
                 self._load_file()
 
         else:
-            if event == cv2.EVENT_RBUTTONUP:
-                if self._state == StretchAppStates.playing:
-                    self._stop_playback()
-                    self._state = StretchAppStates.idle
-
-                self._load_file()
-
-            elif event == cv2.EVENT_LBUTTONUP:
+            if event == cv2.EVENT_LBUTTONUP:
                 if self._state == StretchAppStates.idle:
                     self._state = StretchAppStates.playing
                     x_frac = float(x) / self._size[0]
@@ -289,12 +281,17 @@ class StretchApp(object):
             self._shutdown = True
         if k & 0xff == ord('h'):
             self._showing_help = not self._showing_help
-            logging.info("Toggle help:  %s" % (self._showing_help, ))
+            logging.info("Toggle help:  %s" % (self._showing_help,))
         if k & 0xff == ord('s'):
             self._save()
         if k & 0xff == ord('d'):
             import ipdb
             ipdb.set_trace()
+        if k & 0xff == ord('l'):
+            if self._state == StretchAppStates.playing:
+                self._stop_playback()
+                self._state = StretchAppStates.idle
+            self._load_file()
 
     def _make_frame(self):
 
@@ -322,13 +319,15 @@ class StretchApp(object):
         Write stretched file.
         """
         logging.info("Stretching whole sound...")
-        new_time_indices = np.linspace(0, 1.0, int(self._sound.metadata.nframes * self._stretch_factor))
+        new_time_indices = np.linspace(0, self._sound.duration_sec,
+                                       int(self._sound.metadata.nframes * self._stretch_factor))
         new_chan_data = [interpolator(new_time_indices) for interpolator in self._interps]
         logging.info("\t... done.")
 
         file_name = os.path.splitext(self._filename)[0]
-        out_filename = make_unique_filename("%s_x%.4f.wav" % (file_name,self._stretch_factor))
+        out_filename = make_unique_filename("%s_x%.4f.wav" % (file_name, self._stretch_factor))
         self._sound.write_file(new_chan_data, out_filename)
+
 
 def _draw_v_line(image, x, width, color):
     """

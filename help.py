@@ -1,25 +1,24 @@
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 import logging
 
 from layout import Layout
 
 HELP = ('Sound Stretcher ',
         '',
-        '   Click anywhere to load file.',
+        '   * Click anywhere to load file.',
+        '   * Click on waveform to start playback at that point.',
+        '   * Click again to stop.',
+        '   * Adjust noise threshold & stretch in slider window.',
         '',
-        '   Adjust noise threshold & stretch in slider window.',
+        '   Hotkeys:',
+        '      q - quit',
+        '      h - toggle this help',
+        '      l - load new sound file',
+        '      s - save  (input.wav -> input_x3.00.wav, etc.)',
         '',
-        '   - Works on .wav files (+ .mp3, .m4a, and .ogg w/fmpeg)',
-        '        - Right-click to load a new file.',
-        '   - Click on waveform to start playback at that point',
-        '        - Click to stop.',
         '',
-        '   - Hotkeys:',
-        '        q - quit',
-        '        h - toggle this help',
-        '        s - save  (input.wav -> input_x3.00.wav, etc.)')
+        'file types: .wav (w/ffmpeg:  .mp3, .m4a, and .ogg)')
 
 
 class HelpDisplay(object):
@@ -90,7 +89,6 @@ class HelpDisplay(object):
             self._calc_font_scale()
 
         image = cv2.fillPoly(image, [self._box_poly_coords], self._bkg_color, cv2.LINE_AA)
-
         # text lines
 
         x = self._spacing['outside_indent'] + self._spacing['left_indent']
@@ -100,12 +98,3 @@ class HelpDisplay(object):
                         cv2.LINE_AA)
             y += self._text_sizes[line_ind][0][1] + self._spacing['v_spacing_pixels']
 
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    size = (1000, 800)
-    frame = np.zeros((size[1], size[0], 4), dtype=np.uint8) + Layout.get_color('background')
-    helper = HelpDisplay(frame.shape)
-    helper.add_help(frame)
-    plt.imshow(frame)
-    plt.show()
