@@ -9,6 +9,11 @@ import wave
 import time
 import pyaudio
 
+from collections import namedtuple
+
+# from wave.wave.py, not sure how to do this pythonically
+_wave_params = namedtuple('_wave_params', 'nchannels sampwidth framerate nframes comptype compname')
+
 
 class SoundPlayer(object):
     def __init__(self, sample_width, frame_rate, channels, sample_generator, frames_per_buffer=None):
@@ -75,10 +80,19 @@ class Sound(object):
     """
     EXTENSIONS = ['.m4a', '.ogg', '.mp3']
 
-    def __init__(self, filename):
-        self._filename = filename
-        self.data, self.metadata, self.data_raw = Sound._read_sound(filename)
-        self.duration_sec = self.metadata.nframes / float(self.metadata.framerate)
+    def __init__(self, filename=None, framerate=44100, sampwidth=2, nchannels=1, comptype='NONE',
+                 compname='not compressed'):
+        if filename is not None:
+            self._filename = filename
+            self.data, self.metadata, self.data_raw = Sound._read_sound(filename)
+            self.duration_sec = self.metadata.nframes / float(self.metadata.framerate)
+        else:
+            self._filename = None
+            self.metadata = _wave_params(framerate=framerate, sampwidth=sampwidth, comptype=comptype,
+                                         compname=compname, nchannels=nchannels, nframes=0)
+            self.data = np.array([], dtype=get_encoding_type(self.metadata))
+            self.data_raw = bytes([])
+            self._duration_sec = 0.
 
     def get_mono_data(self):
         """
@@ -131,15 +145,7 @@ class Sound(object):
     @staticmethod
     def _convert_from_bytes(data, wav_params):
         # figure out data type
-        if wav_params.sampwidth == 1:
-            n_data = np.frombuffer(data, dtype=np.uint8)
-        elif wav_params.sampwidth == 2:
-            n_data = np.frombuffer(data, dtype=np.int16)
-        elif wav_params.sampwidth == 4:
-            n_data = np.frombuffer(data, dtype=np.int32)
-        else:
-            raise Exception("Unknown sample width:  %i bytes" % (wav_params.samplewidth,))
-
+        n_data = np.frombuffer(data, get_encoding_type(wav_params))
         # separate interleaved channel data
         n_data = [n_data[offset::wav_params.nchannels] for offset in range(wav_params.nchannels)]
 
@@ -155,21 +161,60 @@ class Sound(object):
 
         return data.tobytes()
 
-    def write_file(self, data, filename):
+    def set_data(self, channel_data):
+        """
+        :param channel_data:  list of numpy arrays
+        """
+        self.data = channel_data
+        self.data_raw = Sound._convert_to_bytes(self.data, get_encoding_type(self.metadata))
+        self.metadata = self.metadata._replace(nframes=channel_data[0].size)
+        self.duration_sec = float(self.metadata.nframes) / self.metadata.framerate
+
+    def write(self, filename):
+        return self.write_data(filename, data_raw=self.data_raw)
+
+    def write_data(self, filename, data=None, data_raw=None):
         """
         Create a sound file with given data, using same params as self.
-        :param data:  list of channel data (numpy arrays of samples)
         :param filename:  to save as
-        :return:  filename
+        :param data:  list of channel data (numpy arrays of samples), or None if using 'data_raw'
+        :param data_raw:  bytes() array, or None if using 'data'
+        :return:  filename written
         """
-        new_bytes = self._convert_to_bytes(data, self.data[0].dtype)
-        new_params = self.metadata._replace(nframes=data[0].size)
+        if data is not None and type(data) is not np.array:
+            raise Exception("data must be numpy array")
+        if data_raw is not None and type(data_raw) is not bytes:
+            raise Exception("data_raw must be bytes array")
+
+        if data is not None:
+            dtype =self.data[0].dtype
+            new_bytes = self._convert_to_bytes(data, dtype)
+        else:
+            new_bytes = data_raw
+
+        n_frames = int(len(new_bytes) / self.metadata.sampwidth)
+        new_params = self.metadata._replace(nframes=n_frames)
         logging.info("Writing file:  %s" % (filename,))
         with wave.open(filename, 'wb') as wav:
             wav.setparams(new_params)
             wav.writeframesraw(new_bytes)
         duration = new_params.nframes / float(self.metadata.framerate)
         print("\tWrote %.4f seconds of audio data (%i samples)." % (duration, new_params.nframes))
+        return filename
+
+
+def get_encoding_type(wav_params):
+    """
+    Find numpy equivalent for different file formats
+    :param wav_params:  metadata
+    :return:  numpy dtype
+    """
+    try:
+        return {1: np.uint8,
+                2: np.int16,
+                4: np.int32}[wav_params.sampwidth]
+    except KeyError:
+        raise Exception("Don't know data type for sample-width = %i." % (wav_params.sampwidth,))
 
 
 '''
