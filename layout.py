@@ -34,9 +34,9 @@ class Layout(object):
            'control_panel_font': cv2.FONT_HERSHEY_DUPLEX,
            'control_panel_font_scale': .6,
 
-           'window_size': (1200, 600),
-           'wave_area_rel': {'top': 0., 'bottom': .75, 'left': 0., 'right': 0.},
-           'control_area_rel': {'top': 0.8, 'bottom': 1.0, 'left': 0., 'right': 0.},
+           'window_size': (1200, 700),
+           'wave_area_rel': {'top': 0., 'bottom': .75, 'left': 0., 'right': 1.},
+           'control_area_rel': {'top': 0.75, 'bottom': 1.0, 'left': 0., 'right':1.},
            'slider_dims': {'axis_thickness': 6,
                            'marker_thickness': 16,
                            'h_indent': 20,
@@ -52,10 +52,10 @@ class Layout(object):
 
                 {'name': 'noise_threshold',
                  'label': 'sound threshold: %.1f',
-                 'range': (0.0, 40.0),
-                 'sample_value': 100.0,
-                 'resolution': .5,
-                 'init': 5.0,
+                 'range': (0.0, 1.0),
+                 'sample_value': .777,
+                 'resolution': .01,
+                 'init': .2,
                  'text_width': 250}]
 
     @staticmethod

@@ -43,6 +43,9 @@ class Slider(object):
         self._clicked = False
         self._tb = None
 
+    def get_value(self):
+        return self._value
+
     def mouse(self, event, x, y):
         """
         Process user moving mouse.
@@ -93,11 +96,13 @@ class Slider(object):
         indent = 15
         image[self._box['top']:self._box['bottom'],
         self._box['right']:self._box['left'], :] = Layout.get_color('control_bkg')
+        center_y = int((self._slider_box['bottom'] + self._slider_box['top']) / 2)
 
         # write text
         string = self._props['label'] % (self._value,)
-        (width, _), _ = cv2.getTextSize(string, self._font, self._font_scale, 1)
-        text_xy = self._text_box['right'] - width, self._text_box['bottom'] - indent
+        (width, height), _ = cv2.getTextSize(string, self._font, self._font_scale, 1)
+        text_xy = (self._text_box['right'] - width,
+                   center_y + int(height / 2))
 
         cv2.putText(image, string, text_xy, self._font, self._font_scale, self._text_color, 1, cv2.LINE_AA)
 
@@ -105,8 +110,6 @@ class Slider(object):
         h = self._dims['height']
         a_t = int(self._dims['axis_thickness'] / 2)
         m_t = int(self._dims['marker_thickness'] / 2)
-
-        center_y = int((self._slider_box['bottom'] + self._slider_box['top']) / 2)
 
         image[center_y - a_t:center_y + a_t, self._slide_left:self._slide_right, :] = self._axis_color  # axis
         image[center_y - h:center_y + h, self._slide_left - a_t:self._slide_left + a_t, :] = self._axis_color  # left
@@ -137,6 +140,12 @@ class ControlPanel(object):
             ctrl.append(Slider(box, control))
 
         return ctrl
+
+    def get_value(self, name):
+        ctrl = [c for c in self._controls if c.name == name]
+        if len(ctrl) != 1:
+            raise Exception("Control not found:  %s" % (name,))
+        return ctrl[0].get_value()
 
     def mouse(self, event, x, y):
         for ctrl_i, control in enumerate(self._controls):
