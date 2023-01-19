@@ -2,6 +2,13 @@ import logging
 import os
 
 
+
+def in_area(pos, bbox):
+    """
+    Point is inside bounding box?
+    """
+    return bbox['left'] <= pos[0] < bbox['right'] and bbox['top'] <= pos[1] < bbox['bottom']
+
 def compact_intervals(ints, max_val):
     """
     Reduce improper interval list, out of bounds (clip) or overlapping (merge)

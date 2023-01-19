@@ -127,7 +127,6 @@ class ControlPanel(object):
         For now, arrange vertically
         """
         n = len(Layout.CONTROLS)
-        v_space = self._box['bottom'] - self._box['top']
         y_div_lines = np.linspace(self._box['top'], self._box['bottom'], n + 1).astype(np.int64)
         ctrl = []
         for i, control in enumerate(Layout.CONTROLS):

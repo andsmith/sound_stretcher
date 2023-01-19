@@ -10,9 +10,10 @@ import os
 
 from sound import Sound, SoundPlayer
 from segmentation import SimpleSegmentation
-from util import get_interval_compliment, make_unique_filename
+from util import get_interval_compliment, make_unique_filename, in_area
 from layout import Layout
 from help import HelpDisplay
+from controls import ControlPanel
 
 
 class StretchAppStates(IntEnum):
@@ -27,37 +28,51 @@ SOUND_BUFFER_SIZE = 1024 * 2
 class StretchApp(object):
 
     def __init__(self, ):
+        # state
         self._state = StretchAppStates.init
         self._filename = None
         self._win_name = "Sound Stretcher / Player"
-        self._refresh_delay = 1. / 60.
-
-        self._size = 1200, 600
         self._shutdown = False
         self._mouse_pos = None
         self._showing_help = False
-        self._help = HelpDisplay(self._size[::-1])
+        self._next_sample = None  # where in sound data will the next sample buffer start
 
-        # controls
+        # user params
         self._noise_threshold = 5.0
         self._stretch_factor = 4.
-        self._margin_dur_sec = 0.2
 
+        # fixed params
+        self._margin_dur_sec = 0.2
+        self._refresh_delay = 1. / 30.
+
+        # window/area sizes
+        self._window_size = Layout.get_value('window_size')
+        def _get_region_dims_abs(dims_rel):
+            return {'top': int(dims_rel['top'] * self._window_size[1]),
+                    'bottom': int(dims_rel['bottom'] * self._window_size[1]),
+                    'left': int(dims_rel['left'] * self._window_size[0]),
+                    'right': int(dims_rel['right'] * self._window_size[0])}
+        self._waveform_area = _get_region_dims_abs(Layout.get_value('wave_area_rel'))
+        self._control_area = _get_region_dims_abs(Layout.get_value('control_area_rel'))
+
+        # data
+        self._help = HelpDisplay(self._window_size[::-1])
         self._sound = None  # waveform
         self._segmentor = None
+        self._interps = None
+        self._image = None  # app background image
+        self._audio = None  # audio player, initialized with sound file parameters after loading.
+
         self._segments = {'intervals': [],  # (start, stop) pairs of indices into self._sound.data
                           'starts': None,  # numpy array of start indices
                           'stops': None}  # numpy array of stop indices, intervals = zip(starts, stops)
-        self._next_sample = None  # where in self._sound.data will the next sample buffer start
-
-        self._image = None  # waveform background
-        self._audio = None  # audio player, initialized with sound file parameters after loading.
         self._stretched_timestamps = None  # timestamps of samples, for interpolation
         # self._stretched_dt = None
-        self._interps = None
 
         self._tkroot = tk.Tk()
         self._tkroot.withdraw()  # use cv2 window as main window
+
+        self._controls = ControlPanel(self._control_update, self._control_area)
 
         self._start_inds = []
         self._buffer_sizes = []
@@ -70,10 +85,25 @@ class StretchApp(object):
 
         self._run()
 
+    def _control_update(self, name, value):
+        """
+        Control panel is updating our params (callback), take appropriate action
+        :param name:  name of param
+        :param value: new value
+        """
+        if name == 'stretch_factor':
+            self._set_stretch(value)
+        if name == 'noise_threshold':
+            self._noise_threshold = 100 - value  # FIX MAGIC NUMBER
+            self._resegment()  # need to re-run
+
     def _mouse(self, event, x, y, flags, param):
         """
-        CV2 mouse callback.  App state changes happen here & when sound finishes.  (hotkeys?)
+        CV2 mouse callback.  App state changes happen here & when sound finishes.  (in future: hotkeys as well)
         """
+
+        self._controls.mouse(event,x,y)
+
         if event == cv2.EVENT_MOUSEMOVE:
             self._mouse_pos = x, y
             return  # no dragging-type interaction
@@ -125,12 +155,15 @@ class StretchApp(object):
                                   self._sound.metadata.nchannels,
                                   self._get_playback_samples,
                                   frames_per_buffer=SOUND_BUFFER_SIZE)
+        if not self._controls.is_started():
+            self._controls.start()
 
     def _set_stretch(self, new_factor=None):
         """
         Change stretch factor for UI.
         Call whenever these change:  stretch factor, sound file
         """
+
         self._stretch_factor = new_factor if new_factor is not None else self._stretch_factor
         self._stretched_buffer_duration = \
             float(SOUND_BUFFER_SIZE) / self._sound.metadata.framerate / self._stretch_factor
@@ -144,38 +177,51 @@ class StretchApp(object):
         self._segments = self._segmentor.get_partitioning(self._noise_threshold, margin_samples)
 
     def _get_background(self):
+        # generate image without sliders (just slider background color
+        image = np.zeros((self._size[1], self._size[0], 4), dtype=np.uint8) + Layout.get_color('wave_bkg')
+        image[self._control_area['top']: self._control_area['bottom'],
+              self._control_area['left']: self._control_area['right'], :] = \
+            np.zeros((self._size[1], self._size[0], 4), dtype=np.uint8) + Layout.get_color('control_bkg')
+        self._add_wave_background(image)
+        print(image.dtype)
+        import matplotlib.pyplot as plt
+        plt.imshow(image)
+        plt.show()
+        return image
+
+    def _add_wave_background(self, image):
         data = self._sound.get_mono_data()
         audio_mean = np.mean(data)
 
         # bin audio into number of horizontal pixels, get max & min for each one
-        bin_size = int(data.size / self._size[0])
-        partitions = data[:bin_size * self._size[0]].reshape(self._size[0], bin_size)
-        max_vals, min_vals = np.max(partitions - audio_mean, axis=1), \
-                             np.min(partitions - audio_mean, axis=1)
+        width = self._waveform_area['right'] - self._waveform_area['left']
+
+        bin_size = int(data.size / width)
+        partitions = data[:bin_size * width].reshape(width, bin_size)
+        max_vals, min_vals = np.max(partitions - audio_mean, axis=1), np.min(partitions - audio_mean, axis=1)
         audio_max, audio_min = np.max(max_vals), np.min(min_vals)
-        y_center = int(self._size[1] / 2)
-        y_height_limit = self._size[1] / 2.05
+
+        y_center = int((self._waveform_area['bottom'] + self._waveform_area['top']) / 2)
+        y_height_limit = (y_center - self._waveform_area['top']) * .95
         y_values_high = y_center + np.int64((max_vals) / audio_max * y_height_limit)
         y_values_low = y_center - np.int64(min_vals / audio_min * y_height_limit)
-        image = np.zeros((self._size[1], self._size[0], 4), dtype=np.uint8) + Layout.get_color('background')
 
         def _color_seg(intervals, color):
             """
             Draw a segments of one color
             :param intervals: [(start, stop), ...]
-            :param color: (r,g,b,a)
+            :param color: numpy array (r,g,b,a)
             """
             for inter_low, inter_high in intervals:
                 for x in range(inter_low, inter_high):
                     image[y_values_low[x]:y_values_high[x] - 1, x, :] = color
 
         # scale intervals from sound samples to pixels
-        factor = float(self._size[0]) / data.size
+        factor = float(width) / data.size
         sound_segs = [(int(factor * seg[0]), int(factor * seg[1])) for seg in self._segments['intervals']]
         noise_segs = get_interval_compliment(sound_segs, self._size[0])
         _color_seg(sound_segs, Layout.get_color('wave_sound'))
         _color_seg(noise_segs, Layout.get_color('wave_noise'))
-        return image
 
     def _start_playback(self, begin_pos_rel=0.):
         """
@@ -242,7 +288,7 @@ class StretchApp(object):
 
     def _run(self):
         cv2.namedWindow(self._win_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self._win_name, self._size)
+        cv2.resizeWindow(self._win_name, self._window_size)
         cv2.setMouseCallback(self._win_name, self._mouse)
 
         t_start = time.perf_counter()  # when last frame shown
@@ -294,20 +340,26 @@ class StretchApp(object):
             self._load_file()
 
     def _make_frame(self):
-
         if self._state == StretchAppStates.init:
-            frame = np.zeros((self._size[1], self._size[0], 4), dtype=np.uint8) + Layout.get_color('background')
+            # Before anything is loaded, just show help
+            frame = np.zeros((self._window_size[1], self._window_size[0], 4), dtype=np.uint8)
             self._help.add_help(frame)
+
         else:
             frame = self._image.copy()
-        if self._mouse_pos is not None:
+
+        mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
+        playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
+
+        if self._mouse_pos is not None and in_area(self._mouse_pos, self._waveform_area):
             mouse_line_x = self._mouse_pos[0]
-            _draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, Layout.get_color('mouse_cursor'))
+            _draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, mouse_cursor_color, y_range=self._waveform_area)
 
         if self._state == StretchAppStates.playing:
             playback_line_x = int(float(self._next_frame_index) / self._sound.metadata.nframes * self._size[0])
             # print("LINE %i" % (playback_line_x,))
-            _draw_v_line(frame, playback_line_x, Layout.CURSOR_WIDTH, Layout.get_color('playback_cursor'))
+            _draw_v_line(frame, playback_line_x, Layout.CURSOR_WIDTH, playback_cursor_color,
+                         y_range=self._waveform_area)
 
         if self._showing_help:
             self._help.add_help(frame)
@@ -329,12 +381,13 @@ class StretchApp(object):
         self._sound.write_file(new_chan_data, out_filename)
 
 
-def _draw_v_line(image, x, width, color):
+def _draw_v_line(image, x, width, color, y_range=None):
     """
     Draw vertical line on image.
     :param image: to draw on
     :param x: x coordinate of line
     :param width: of line in pixels (should be even?)
+    :param y_range:  dict with 'top' and 'bottom' or None for whole image
     :param color: of line to draw
     """
     x_coords = np.array([x - width / 2, x + width / 2])
@@ -343,14 +396,19 @@ def _draw_v_line(image, x, width, color):
     if x_coords[1] > image.shape[1] - 1:
         x_coords -= x_coords[1] - image.shape[1] + 1
 
+    if y_range is None:
+        y_low, y_high = 0, image.shape[0]
+    else:
+        y_low, y_high = y_range['top'], y_range['bottom']
+
     x_coords = np.int64(x_coords)
     if len(color) == 4 and color[3] < 255:
-        line = image[:, x_coords[0]:x_coords[1], :]
+        line = image[y_low: y_high, x_coords[0]:x_coords[1], :]
         alpha = float(color[3]) / 255.
         new_line = alpha * color + (1.0 - alpha) * line
-        image[:, x_coords[0]:x_coords[1], :] = np.uint8(new_line)
+        image[y_low: y_high, x_coords[0]:x_coords[1], :] = np.uint8(new_line)
     else:
-        image[:, x_coords[0]:x_coords[1], :] = color
+        image[y_low: y_high, x_coords[0]:x_coords[1], :] = color
 
 
 if __name__ == "__main__":
