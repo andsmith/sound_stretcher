@@ -17,14 +17,21 @@ This was originally written for listening to birdsong, to bring the incomprehens
 #### Good examples sound files:
 * https://up.wjbk.site/wiki/File:Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3
 
-Click to watch on YouTube: [![IMAGE ALT TEXT HERE](http://img.youtube.com/vi/3fiCv_KbzCg/0.jpg)](http://www.youtube.com/watch?v=3fiCv_KbzCg)
+
+Click to watch on YouTube:
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=3fiCv_KbzCg
+" target="_blank"><img src="http://img.youtube.com/vi/3fiCv_KbzCg/0.jpg" 
+alt="SoundStretcher running on Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3" width="240" height="180" border="10" /></a>
 
   
 * https://up.wjbk.site/wiki/File:Aphelocoma_californica_-_California_Scrub_Jay_XC110976.mp3
 
-Click to watch on YouTube: <a href="http://www.youtube.com/watch?feature=player_embedded&v=u6vhHYYjG5o
+Click to watch on YouTube:
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=u6vhHYYjG5o
 " target="_blank"><img src="http://img.youtube.com/vi/u6vhHYYjG5o/0.jpg" 
-alt="Aphelocoma_californica_-_California_Scrub_Jay_XC110976.mp3" width="240" height="180" border="10" /></a>
+alt="SoundStretcher running on Aphelocoma_californica_-_California_Scrub_Jay_XC110976.mp3" width="240" height="180" border="10" /></a>
 
 ### Details & instructions
 ![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
