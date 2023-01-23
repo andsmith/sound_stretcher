@@ -8,7 +8,7 @@ from layout import Layout
 class HelpDisplay(object):
     HELP = ('Sound Stretcher ',
             '',
-            '   * Click anywhere to load file.',
+            '   Click this screen to open file...',
             '',
             '   Hotkeys:',
             '     (space) - Play / Stop',
