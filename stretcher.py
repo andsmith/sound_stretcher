@@ -15,6 +15,8 @@ from layout import Layout
 from help import HelpDisplay
 from controls import ControlPanel
 
+from spectrograms import get_power_spectrum
+
 
 class StretchAppStates(IntEnum):
     init = 0
@@ -38,7 +40,6 @@ class StretchApp(object):
         self._next_sample = None  # where in sound data will the next sample buffer start
 
         # fixed params
-        self._margin_dur_sec = 0.2
         self._refresh_delay = 1. / 30.
 
         # window/area sizes
@@ -51,7 +52,9 @@ class StretchApp(object):
                     'right': int(dims_rel['right'] * self._window_size[0])}
 
         self._waveform_area = _get_region_dims_abs(Layout.get_value('wave_area_rel'))
+        self._spectrum_area = _get_region_dims_abs(Layout.get_value('spectrum_area_rel'))
         self._control_area = _get_region_dims_abs(Layout.get_value('control_area_rel'))
+        self._interaction_area = _get_region_dims_abs(Layout.get_value('interaction_area_rel'))
 
         # data
         self._help = HelpDisplay(self._window_size[::-1])
@@ -59,6 +62,7 @@ class StretchApp(object):
         self._segmentor = None
         self._interps = None
         self._image = None  # app background image
+        self._spectrum_image = None
         self._audio = None  # audio player, initialized with sound file parameters after loading.
 
         self._segments = {'intervals': [],  # (start, stop) pairs of indices into self._sound.data
@@ -75,7 +79,6 @@ class StretchApp(object):
         # user params
         self._noise_threshold = self._controls.get_value('noise_threshold')
         self._stretch_factor = self._controls.get_value('stretch_factor')
-
 
         self._start_inds = []
         self._buffer_sizes = []
@@ -104,16 +107,11 @@ class StretchApp(object):
         """
         CV2 mouse callback.  App state changes happen here & when sound finishes.  (in future: hotkeys as well)
         """
-
-        self._controls.mouse(event, x, y)
+        if self._state != StretchAppStates.init:
+            self._controls.mouse(event, x, y)
 
         if event == cv2.EVENT_MOUSEMOVE:
             self._mouse_pos = x, y
-
-
-        # just wave stuff after this
-        if not in_area((x,y), self._waveform_area):
-            return
 
         if self._state == StretchAppStates.init:
 
@@ -121,17 +119,22 @@ class StretchApp(object):
                 self._load_file()
 
         else:
+            # just wave stuff after this
+            if not in_area((x, y), self._interaction_area):
+                return
+
             if event == cv2.EVENT_LBUTTONUP:
 
                 if self._state == StretchAppStates.idle:
                     self._state = StretchAppStates.playing
-                    x_frac = float(x) / self._window_size[0]  # TODO:  check within waveform_area & scale appropriately
+                    x_frac = float(x) / self._window_size[0]
                     self._start_playback(x_frac)
                 else:
                     self._state = StretchAppStates.idle
                     self._stop_playback()
 
     def _stop_playback(self):
+        logging.info("Stopping playback.")
         self._audio.stop()
 
     def _load_file(self):
@@ -148,10 +151,11 @@ class StretchApp(object):
         self._sound = Sound(self._filename)
 
         # init data
-        self._segmentor = SimpleSegmentation(self._sound)
+        self._seg_params = Layout.get_value('segmentation_params')
+        self._segmentor = SimpleSegmentation(self._sound, self._seg_params['smoothing_kern_width_sec'])
+        self._make_spectrogram_image()
         self._resegment()
         self._set_stretch()
-        self._image = self._get_background()
         time_indices = np.linspace(0, self._sound.duration_sec, self._sound.metadata.nframes + 1)[:-1]
         self._interps = [interp1d(time_indices, chan_samples) for chan_samples in self._sound.data]
 
@@ -163,6 +167,7 @@ class StretchApp(object):
                                   self._sound.metadata.nchannels,
                                   self._get_playback_samples,
                                   frames_per_buffer=SOUND_BUFFER_SIZE)
+        logging.info("Sound loaded.")
 
     def _set_stretch(self, new_factor=None):
         """
@@ -179,8 +184,8 @@ class StretchApp(object):
         self._stretched_dt = self._stretched_timestamps[1] - self._stretched_timestamps[0]
 
     def _resegment(self):
-        margin_samples = int(self._sound.metadata.framerate * self._margin_dur_sec)
-        self._segments = self._segmentor.get_partitioning(self._noise_threshold, margin_samples)
+        self._segments = self._segmentor.get_segmentation(threshold=self._noise_threshold,
+                                                          margin_duration_sec=self._seg_params['margin_sec'])
         self._image = self._get_background()
 
     def _get_background(self):
@@ -188,40 +193,43 @@ class StretchApp(object):
         image = np.zeros((self._window_size[1], self._window_size[0], 4), dtype=np.uint8) + np.array(
             Layout.get_color('wave_bkg'), dtype=np.uint8)
         self._add_wave_background(image)
+        self._add_spectrogram_background(image)
         return image
 
+    def _make_spectrogram_image(self):
+        params = Layout.get_value('spectrogram_params')
+        t_res = params['time_resolution_sec']
+        hz_res = params['frequency_resolution_hz']
+
+        z, freqs, times = get_power_spectrum(self._sound.get_mono_data(),
+                                             self._sound.metadata.framerate,
+                                             resolution_hz=hz_res,
+                                             resolution_sec=t_res)
+
+        freq_range = params['plot_freq_range_hz']
+        min_freq_ind, max_freq_ind = np.sum(freqs < freq_range[0]), np.sum(freqs < freq_range[1])
+        power = np.log(3 + np.abs(z[min_freq_ind:max_freq_ind, :]))
+        power = (power / np.max(power) * 255.0).astype(np.uint8)
+
+        image = cv2.applyColorMap(power, cv2.COLORMAP_HOT)
+        dest_dims = self._spectrum_area['right'] - self._spectrum_area['left'], self._spectrum_area['bottom'] - \
+                    self._spectrum_area['top']
+
+        self._spectrum_image = cv2.resize(image, dest_dims, cv2.INTER_CUBIC)[::-1, :, ::-1]
+
+    def _add_spectrogram_background(self, frame):
+        frame[self._spectrum_area['top']:  self._spectrum_area['bottom'],
+        self._spectrum_area['left']:  self._spectrum_area['right'], :3] = self._spectrum_image
+
+        frame[self._spectrum_area['top']:  self._spectrum_area['bottom'],
+        self._spectrum_area['left']:  self._spectrum_area['right'], 3] = 255
+
     def _add_wave_background(self, image):
-        data = self._sound.get_mono_data()
-        audio_mean = np.mean(data)
-        # bin audio into number of horizontal pixels, get max & min for each one
-        width = self._waveform_area['right'] - self._waveform_area['left']
-
-        bin_size = int(data.size / width)
-        partitions = data[:bin_size * width].reshape(width, bin_size)
-        max_vals, min_vals = np.max(partitions - audio_mean, axis=1), np.min(partitions - audio_mean, axis=1)
-        audio_max, audio_min = np.max(max_vals), np.min(min_vals)
-
-        y_center = int((self._waveform_area['bottom'] + self._waveform_area['top']) / 2)
-        y_height_limit = (y_center - self._waveform_area['top']) * .95
-        y_values_high = y_center + np.int64((max_vals) / audio_max * y_height_limit)
-        y_values_low = y_center - np.int64(min_vals / audio_min * y_height_limit)
-
-        def _color_seg(intervals, color):
-            """
-            Draw a segments of one color
-            :param intervals: [(start, stop), ...]
-            :param color: numpy array (r,g,b,a)
-            """
-            for inter_low, inter_high in intervals:
-                for x in range(inter_low, inter_high):
-                    image[y_values_low[x]:y_values_high[x] - 1, x, :] = color
-
-        # scale intervals from sound samples to pixels
-        factor = float(width) / data.size
-        sound_segs = [(int(factor * seg[0]), int(factor * seg[1])) for seg in self._segments['intervals']]
-        noise_segs = get_interval_compliment(sound_segs, max_vals.size)
-        _color_seg(sound_segs, Layout.get_color('wave_sound'))
-        _color_seg(noise_segs, Layout.get_color('wave_noise'))
+        self._segmentor.draw_segmented_waveform(image,
+                                                self._segments,
+                                                bbox=self._waveform_area,
+                                                sound_color=Layout.get_color('wave_sound'),
+                                                noise_color=Layout.get_color('wave_noise'))
 
     def _start_playback(self, begin_pos_rel=0.):
         """
@@ -250,7 +258,6 @@ class StretchApp(object):
         reference_samples = self._sound.data_raw[nc * self._next_frame_index:nc * (self._next_frame_index + endpoint)]
         self._next_frame_index = endpoint
         '''
-        # import ipdb; ipdb.set_trace()
         n_segs_starting_before = np.sum(self._segments['starts'] < self._next_frame_index)
         n_segs_stopping_before = np.sum(self._segments['stops'] < self._next_frame_index)
         if n_segs_starting_before == n_segs_stopping_before:
@@ -274,6 +281,7 @@ class StretchApp(object):
             logging.info("Sound finished, inside sound segment.")
             stop_timestamp = self._sound.duration_sec  # out of data, inside segment
             buffer_size = int((stop_timestamp - start_timestamp) / self._stretched_dt)
+            self._state = StretchAppStates.idle
         else:
             buffer_size = n_samples
         self._buffer_sizes.append(buffer_size)
@@ -325,15 +333,22 @@ class StretchApp(object):
     def _keyboard(self, k):
         if k & 0xff == ord('q'):
             self._shutdown = True
-        if k & 0xff == ord('h'):
+        elif k & 0xff == ord('h'):
             self._showing_help = not self._showing_help
             logging.info("Toggle help:  %s" % (self._showing_help,))
-        if k & 0xff == ord('s'):
+        elif k & 0xff == ord('s'):
             self._save()
-        if k & 0xff == ord('d'):
+        elif k & 0xff == ord('d'):
             import ipdb
             ipdb.set_trace()
-        if k & 0xff == ord('l'):
+        elif k & 0xff == ord(' '):
+            if self._state == StretchAppStates.idle:
+                self._start_playback(0.0)
+                self._state = StretchAppStates.playing
+            elif self._state == StretchAppStates.playing:
+                self._stop_playback()
+                self._state = StretchAppStates.idle
+        elif k & 0xff == ord('l'):
             if self._state == StretchAppStates.playing:
                 self._stop_playback()
                 self._state = StretchAppStates.idle
@@ -351,12 +366,12 @@ class StretchApp(object):
         mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
         playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
 
-
         if self._state in [StretchAppStates.playing, StretchAppStates.idle]:
             # draw mouse
-            if self._mouse_pos is not None and in_area(self._mouse_pos, self._waveform_area):
+            if self._mouse_pos is not None and in_area(self._mouse_pos, self._interaction_area):
                 mouse_line_x = self._mouse_pos[0]
-                _draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, mouse_cursor_color, y_range=self._waveform_area)
+                _draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, mouse_cursor_color,
+                             y_range=self._interaction_area)
             # draw controls
             self._controls.draw(frame)
 
@@ -365,7 +380,7 @@ class StretchApp(object):
             playback_line_x = int(float(self._next_frame_index) / self._sound.metadata.nframes * self._window_size[0])
             # print("LINE %i" % (playback_line_x,))
             _draw_v_line(frame, playback_line_x, Layout.CURSOR_WIDTH, playback_cursor_color,
-                         y_range=self._waveform_area)
+                         y_range=self._interaction_area)
 
         if self._showing_help:
             self._help.add_help(frame)

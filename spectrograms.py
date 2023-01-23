@@ -10,7 +10,7 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
     Get a short-time fft (i.e. with a sliding window) of a signal.
 
     Higher values of resolution_hz resolve higher frequencies better at the expense of lower frequencies.
-    Higher values of resolution_sec are necessary to resolve higher frequencies, but do not affect lower.
+    Higher values of resolution_sec are necessary to resolve higher frequencies, but will blur out the lower. etc.
     (Do more passes with different values to resolve different areas of the spectrum, etc.)
 
     (Default params are somewhat optimized for visualizing birdsong spectra.)
@@ -34,6 +34,7 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
     padding_samples = window_size // 2
     padding_duration_sec = padding_samples / frame_rate
     step_size = int(resolution_sec * frame_rate)
+
     overlap = window_size - step_size
 
     # make sure chunk_size has whole number of windows

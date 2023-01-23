@@ -187,7 +187,7 @@ class Sound(object):
             raise Exception("data_raw must be bytes array")
 
         if data is not None:
-            dtype =self.data[0].dtype
+            dtype = self.data[0].dtype
             new_bytes = self._convert_to_bytes(data, dtype)
         else:
             new_bytes = data_raw
@@ -199,7 +199,7 @@ class Sound(object):
             wav.setparams(new_params)
             wav.writeframesraw(new_bytes)
         duration = new_params.nframes / float(self.metadata.framerate)
-        print("\tWrote %.4f seconds of audio data (%i samples)." % (duration, new_params.nframes))
+        logging.info("\tWrote %.4f seconds of audio data (%i samples)." % (duration, new_params.nframes))
         return filename
 
 
@@ -215,66 +215,3 @@ def get_encoding_type(wav_params):
                 4: np.int32}[wav_params.sampwidth]
     except KeyError:
         raise Exception("Don't know data type for sample-width = %i." % (wav_params.sampwidth,))
-
-
-'''
-
-class StretchyWave(object):
-
-    def save_slowed(self, factor):
-
-        out_name = "%s_slowed_%.2f.wav" % (self._in_stem, factor)
-        if os.path.exists(out_name):
-            print("OVERWRITING:  %s" % (out_name,))
-        else:
-            print("Saving to:  %s" % (out_name,))
-        time_indices = np.linspace(0, 1.0, self._wav_params.nframes)
-        new_time_indices = np.linspace(0, 1.0, int(self._wav_params.nframes * factor))
-        interpolators = [interp1d(time_indices, chan_data) for chan_data in self._data]
-        new_chan_data = [interpolator(new_time_indices) for interpolator in interpolators]
-        if self._plot_params['plot_len_sec'] > 0:
-            self._plot(new_chan_data, stretch_factor=factor)
-        new_bytes = self._convert_to_bytes(new_chan_data)
-        new_params = self._wav_params._replace(nframes=new_chan_data[0].size)
-        with wave.open(out_name, 'wb') as wav:
-            wav.setparams(new_params)
-            wav.writeframesraw(new_bytes)
-        duration = new_params.nframes / float(self._wav_params.framerate)
-        print("\tcontains %.4f seconds of audio data." % (duration,))
-
-
-    def get_nchannels(self):
-        return self._wav_params.nchannels
-
-    def get_axes(self):
-        return self._plot_axes
-
-
-def run(args):
-    sw = StretchyWave(args.filename)
-    sw.save_slowed(args.factor)
-
-    if args.plot > 0.:
-        # legend
-        axes = sw.get_axes()
-        n_chan = sw.get_nchannels()
-        axes[0].legend(['Original', "Slowed %.2f X" % (args.factor,)])
-
-        for ax_i in range(n_chan):
-            axes[ax_i].set_yticks([])
-            axes[ax_i].set_ylabel('channel %i' % (ax_i,))
-        axes[-1].set_xlabel('seconds')
-
-        plt.show()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Slow down sound (time & frequencies) by desired factor.")
-    parser.add_argument("filename", help="Input sound file, one of:  %s." % (StretchyWave.EXTENSIONS,), type=str)
-    parser.add_argument("--factor", "-f", help="Slow down by this much.", type=float, default=4.0)
-    parser.add_argument("--plot", "-p", help="Plot waveforms.", type=bool, action='store_true')
-    parser.add_argument("--clean_db", "-c", help="DB threshold for silence removal (0 for None).", type=float,
-                        default=60.0)
-    parsed = parser.parse_args()
-    run(parsed)
-'''

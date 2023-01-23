@@ -34,28 +34,36 @@ class Layout(object):
            'control_panel_font': cv2.FONT_HERSHEY_DUPLEX,
            'control_panel_font_scale': .6,
 
-           'window_size': (1200, 700),
-           'wave_area_rel': {'top': 0., 'bottom': .75, 'left': 0., 'right': 1.},
-           'control_area_rel': {'top': 0.75, 'bottom': 1.0, 'left': 0., 'right':1.},
+           'window_size': (1200, 500),
+           'wave_area_rel': {'top': 0., 'bottom': .375, 'left': 0., 'right': 1.},
+           'spectrum_area_rel': {'top': .375, 'bottom': .75, 'left': 0., 'right': 1.},
+           'control_area_rel': {'top': 0.75, 'bottom': 1.0, 'left': 0., 'right': 1.},
+           'interaction_area_rel': {'top': 0., 'bottom': 0.75,'left': 0., 'right': 1.0},
            'slider_dims': {'axis_thickness': 6,
                            'marker_thickness': 16,
                            'h_indent': 20,
-                           'height': 15}}
+                           'height': 15},
+           'spectrogram_params': {'plot_freq_range_hz': (0., 13750.),
+                                  'time_resolution_sec': 0.001,
+                                  'frequency_resolution_hz': 110.0},
+           'segmentation_params': {'smoothing_kern_width_sec': 0.02,
+                                   'margin_sec': 0.0}}  # buggy?
 
     CONTROLS = [{'name': 'stretch_factor',
                  'label': 'stretch factor: %.2f',
                  'range': (1.0, 10.0),
                  'resolution': 0.25,
-                 'init': 1.5,
+                 'init': 1.0,
                  'sample_value': 10.0,  # large test value for text fitting
                  'text_width': 250},
 
                 {'name': 'noise_threshold',
-                 'label': 'sound threshold: %.1f',
-                 'range': (0.0, 1.0),
+                 'label': 'sound threshold: %.4f',
+                 'range': (0.0, 1.),
                  'sample_value': .777,
                  'resolution': .01,
-                 'init': .2,
+                 'smoothing_sec': 0.01,  # sd of gaussian smoothing kernel
+                 'init': .00,
                  'text_width': 250}]
 
     @staticmethod
