@@ -25,9 +25,11 @@ This was originally written for listening to birdsong, to bring the incomprehens
 alt="IMAGE ALT TEXT HERE" width="240" height="180" border="10" /></a>
 
 ### Details & instructions
-![Example](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
+![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
 
-1. Run:    ```python stretcher.py```
+0. Download the example sound files.
+
+1. Run:    ```python stretcher.py```, click the opening screen to load a sound file.
 
 2. Click the wave or spectrum to start/stop.  Hit 'h' for help.
 
