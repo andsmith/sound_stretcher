@@ -10,8 +10,8 @@ from tkinter import filedialog
 import tkinter as tk
 from scipy.interpolate import interp1d
 import os
-from threading import Thread
-
+from threading import Thread, Lock
+from version import VERSION
 from sound import Sound, SoundPlayer
 from util import make_unique_filename, in_area, draw_v_line
 from layout import Layout
@@ -39,10 +39,11 @@ class StretchApp(object):
     def __init__(self, ):
         self._state = StretchAppStates.init
         self._filename = None
-        self._win_name = "Sound Stretcher"
+        self._win_name = "Sound Stretcher %s" % (VERSION,)
         self._shutdown = False
         self._mouse_pos = None
         self._showing_help = False
+
         self._playback_position_t = None  # where in sound data will the next sample buffer come from (during playback)
 
         # fixed params
@@ -71,6 +72,8 @@ class StretchApp(object):
         self._bkg = None  # app background image
         self._audio = None  # audio player, initialized with sound file parameters after loading.
         self._last_frame = None
+        self._last_encoded_samples = None
+        self._audio_lock = Lock()
 
         self._tkroot = tk.Tk()
         self._tkroot.withdraw()  # use cv2 window as main window
@@ -86,9 +89,11 @@ class StretchApp(object):
                            'frame_count': 0,
                            'start_time': time.perf_counter(),
                            'update_interval_sec': 5.0,
-                           'idle_t': 0.0}
+                           'idle_t': 0.0,
+                           'dropped_audio_frames': 0}
         # user params
         self._stretch_factor = self._controls.get_value('stretch_factor')
+        self._last_stretch_factor = self._stretch_factor  # for smoother transitions, interpolate
 
         # start app
         self._run()
@@ -191,8 +196,6 @@ class StretchApp(object):
         logging.info("\t... complete.")
         return image
 
-
-
     def _add_spectrogram_background(self, frame):
         params = Layout.get_value('spectrogram_params')
         t_res = params['time_resolution_sec']
@@ -235,9 +238,25 @@ class StretchApp(object):
         Generate next sound buffer.
         :param n_samples:  Interpolated/spliced sound data
         """
+
+        if not self._audio_lock.acquire(blocking=False):
+            samples = self._last_encoded_samples[:n_samples]
+            print("Drop!")
+            self._run_stats['dropped_audio_frames'] += 1
+            return samples
+
         # how far ahead to get buffer data
-        t_end = self._playback_position_t + n_samples / self._sound.metadata.framerate / self._stretch_factor
-        timestamps = np.linspace(self._playback_position_t, t_end, n_samples + 1)  # cache this?
+        if self._last_stretch_factor == self._stretch_factor:
+            # evenly placed samples, made closer by self._stretch factor
+            t_end = self._playback_position_t + n_samples / self._sound.metadata.framerate / self._stretch_factor
+            timestamps = np.linspace(self._playback_position_t, t_end, n_samples + 1)  # cache this?
+
+        else:
+            # Stretch factor at beginning should be old value, new value at end
+            dt_first = 1.0 / self._sound.metadata.framerate / self._last_stretch_factor
+            dt_last = 1.0 / self._sound.metadata.framerate / self._stretch_factor
+            dt = np.linspace(dt_first, dt_last, n_samples)
+            timestamps = np.hstack([[0.0], np.cumsum(dt)]) + self._playback_position_t
 
         if timestamps[-1] > self._sound.duration_sec:
             logging.info("Sound finished.")
@@ -247,10 +266,13 @@ class StretchApp(object):
 
         # interpolate
         samples = [chan_interp(timestamps[:-1]) for chan_interp in self._interps]
+        self._last_encoded_samples = samples
         self._playback_position_t = timestamps[-1]
 
         samples_encoded = self._sound.encode_samples(samples)
         self._run_stats['buffer_count'] += 1
+        self._last_stretch_factor = self._stretch_factor
+        self._audio_lock.release()
         return samples_encoded
 
     def _run(self):
@@ -269,7 +291,6 @@ class StretchApp(object):
             if remaining_wait > 0:
                 self._run_stats['idle_t'] += remaining_wait
                 time.sleep(remaining_wait)
-
             cv2.imshow(self._win_name, self._last_frame[:, :, 2::-1].copy())
             k = cv2.waitKey(1)
             t_start = now
@@ -284,11 +305,12 @@ class StretchApp(object):
             if duration > self._run_stats['update_interval_sec']:
                 frame_rate = self._run_stats['frame_count'] / duration
                 buffer_rate = self._run_stats['buffer_count'] / duration
-                logging.info("Frame rate:  %.2f FPS,  idle:  %.2f %%, audio buffers/sec:  %.2f" % (
-                    frame_rate, 100. * self._run_stats['idle_t'] / duration, buffer_rate))
+                logging.info("Frame rate:  %.2f FPS,  audio buffers/sec:  %.2f (%i dropped)" % (
+                    frame_rate, buffer_rate, self._run_stats['dropped_audio_frames']))
                 self._run_stats['start_time'] = now
                 self._run_stats['idle_t'] = 0.0
                 self._run_stats['frame_count'] = 0
+                self._run_stats['dropped_audio_frames'] = 0
                 self._run_stats['buffer_count'] = 0
 
     def _keyboard(self, k):
