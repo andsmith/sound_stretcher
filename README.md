@@ -18,9 +18,11 @@ This was originally written for listening to birdsong, to bring the incomprehens
 * https://up.wjbk.site/wiki/File:Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3
 * https://up.wjbk.site/wiki/File:Aphelocoma_californica_-_California_Scrub_Jay_XC110976.mp3
 ### Details & instructions
-![Example](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
+![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
 
-1. Run:    ```python stretcher.py```
+0. Download the example sound files.
+
+1. Run:    ```python stretcher.py```, click the opening screen to load a sound file.
 
 2. Click the wave or spectrum to start/stop.  Hit 'h' for help.
 
