@@ -11,7 +11,7 @@ import pyaudio
 
 from collections import namedtuple
 
-# from wave.wave.py, not sure how to do this pythonically
+# copied from wave.wave.py, not sure how to do this pythonically
 _wave_params = namedtuple('_wave_params', 'nchannels sampwidth framerate nframes comptype compname')
 
 
@@ -20,8 +20,9 @@ class SoundPlayer(object):
         """
         Open stream for playing.
         :param sample_width:  bytes per frame
+        :param frame_rate:  Samples per second
         :param channels: 1 or 2
-        :param rate:  frame rate (e.g. 44100)
+        :param sample_generator:  Function taking 1 int (n_samples) and returning that many samples
         """
         self._sample_width = sample_width
         self._frame_rate = frame_rate
@@ -55,6 +56,15 @@ class SoundPlayer(object):
                                     stream_callback=self._get_samples)
 
     def _get_samples(self, in_data, frame_count, time_info, status):
+        """
+        (Pyaudio callback)
+        pyaudio wants more samples, so get them from the callback
+        :param in_data: pyaudio param
+        :param frame_count:
+        :param time_info: pyaudio param
+        :param status: pyaudio param
+        :return:  frame_count samples, or fewer if at the end of the sound, and the appropriate code
+        """
         data = self._sample_gen(frame_count)
         # If len(data) is less than requested frame_count, PyAudio automatically
         # assumes the stream is finished, and the stream stops.
@@ -101,7 +111,7 @@ class Sound(object):
         """
         if len(self.data) == 1:
             return self.data[0]
-        return np.mean(self.data, axis=1)
+        return np.mean(self.data, axis=0)
 
     def encode_samples(self, samples):
         return Sound._convert_to_bytes(samples, self.data[0].dtype)
@@ -181,8 +191,8 @@ class Sound(object):
         :param data_raw:  bytes() array, or None if using 'data'
         :return:  filename written
         """
-        if data is not None and type(data) is not np.array:
-            raise Exception("data must be numpy array")
+        if data is not None and type(data) is not list and not all([type(chan_data) == np.array for chan_data in data]):
+            raise Exception("data must be list of numpy arrays")
         if data_raw is not None and type(data_raw) is not bytes:
             raise Exception("data_raw must be bytes array")
 
@@ -204,7 +214,7 @@ class Sound(object):
 
     def draw_waveform(self, image, bbox=None, color=(255, 255, 255, 255)):
         """
-        Draw waveform on an image, in 2 colors.
+        Draw waveform on an image.
         :param image:  draw on this image
         :param bbox:  dict with 'top', 'bottom','left','right', bounds within image to draw (scaled to max amplitude)
         :param color: draw waveform  in this color
@@ -216,8 +226,8 @@ class Sound(object):
         audio_mean = np.mean(data)
         # bin audio into number of horizontal pixels, get max & min for each one
         width = bbox['right'] - bbox['left']
-
         bin_size = int(data.size / width)
+
         partitions = data[:bin_size * width].reshape(width, bin_size)
         max_vals, min_vals = np.max(partitions - audio_mean, axis=1), np.min(partitions - audio_mean, axis=1)
         audio_max, audio_min = np.max(max_vals), np.min(min_vals)

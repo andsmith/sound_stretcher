@@ -12,8 +12,16 @@ def indent(bbox, margin):
 
 
 class Slider(object):
+    """
+    Standard slider with label
+    """
 
     def __init__(self, bbox, props):
+        """
+        Initialize a slider
+        :param bbox: dict with 'top','bottom','left','right' bounding slider area
+        :param props: dict, imported from Layout.CONTROLS
+        """
         self.name = props['name']
         self._font = Layout.get_value('control_panel_font')
         self._font_scale = Layout.get_value('control_panel_font_scale')
@@ -83,7 +91,6 @@ class Slider(object):
         return np.round(value / self._props['resolution']) * self._props['resolution']
 
     def _get_pos_from_value(self, value):
-
         rel_pos = (value - self._props['range'][0]) / (self._props['range'][1] - self._props['range'][0])
         x = self._slide_left + rel_pos * (self._slide_right - self._slide_left)
         return int(x)

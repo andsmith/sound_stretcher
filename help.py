@@ -9,25 +9,25 @@ class HelpDisplay(object):
     HELP = ('Sound Stretcher ',
             '',
             '   * Click anywhere to load file.',
-            '   * Click wave/spectrum to start playback at that points.',
-            '   * Click again to stop.',
-            '   * Adjust noise threshold & stretch in slider window.',
             '',
             '   Hotkeys:',
             '     (space) - Play / Stop',
-            '           q - quit',
             '           h - toggle this help',
             '           l - load new sound file',
-            '           s - save  (input.wav -> input_x3.00.wav, etc.)',
+            '           s - save',
+            '           q - quit',
             '',
             '',
             'file types: .wav (w/ffmpeg:  .mp3, .m4a, and .ogg)')
 
-    def __init__(self, image_shape):
-        self._shape = image_shape[:2]
+    def __init__(self, frame_shape):
+        """
+        :param frame_shape:  of wnidow
+        """
+        self._shape = frame_shape[:2]
         margin_px = 40
-        box_dims = {'top': margin_px, 'bottom': image_shape[0] - margin_px,
-                    'left': margin_px, 'right': image_shape[1] - margin_px}
+        box_dims = {'top': margin_px, 'bottom': frame_shape[0] - margin_px,
+                    'left': margin_px, 'right': frame_shape[1] - margin_px}
         self._font = Layout.get_value('help_font')
         self._bkg_col = Layout.get_color('help_bkg')
         self._text_col = Layout.get_color('help_text')

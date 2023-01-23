@@ -105,5 +105,5 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
     frequencies = freqs
     z_values = np.hstack(z_vals)
     timestamps = np.hstack(times)
-
+    logging.info("\t...complete with %i frequency bins and %i time windows." % (frequencies.size, timestamps.size))
     return z_values, frequencies, timestamps

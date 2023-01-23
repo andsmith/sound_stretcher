@@ -6,7 +6,9 @@ import logging
 
 class TextBox(object):
     """
-    Write text on a box over image
+    Write text on a box over image.
+
+    Initialize with text & params, then call write_text(image) to add to the image.
     """
 
     def __init__(self, box_dims, text_lines, bkg_color=(64, 64, 64, 200), text_color=(255, 255, 255, 255),
@@ -24,7 +26,7 @@ class TextBox(object):
         logging.info("Creating text box:  %s x %i  \"%s..." % (self._box_width, self._box_height, text_lines[0][:10]))
 
         self._spacing = dict(
-            v_spacing_pixels=15,  # between lines
+            v_spacing_pixels=10,  # between lines
             v_indent=15,  # top & bottom
             left_indent=15,
             right_indent=15)
@@ -79,6 +81,7 @@ class TextBox(object):
 
 def get_font_scale(lines, width, height, v_spacing_pixels, font, thickness, font_scale=1.0, line_style=cv2.LINE_AA):
     """
+    Automatically resize font if it won't fit in the box.
 
     :param lines:  list of strings
     :param width:  pixels to fit text horizontally
