@@ -12,20 +12,16 @@ This was originally written for listening to birdsong, to bring the incomprehens
 
 * [Nightengales](https://up.wjbk.site/w/index.php?title=Special:MediaSearch&search=nightengale&type=audio),
 * [Mockingbirds](https://up.wjbk.site/w/index.php?title=Special:MediaSearch&search=mockingbird&type=audio), and
-* [California scrub-jays](https://up.wjbk.site/w/index.php?search=Aphelocoma+californica+&title=Special:MediaSearch&go=Go&type=audio) one of the most ear-splitting birds in California.  
+* [California scrub-jays](https://up.wjbk.site/w/index.php?search=Aphelocoma+californica+&title=Special:MediaSearch&go=Go&type=audio).
 
-### Details
+#### Good examples sound files:
+* https://up.wjbk.site/wiki/File:Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3
+* https://up.wjbk.site/wiki/File:Aphelocoma_californica_-_California_Scrub_Jay_XC110976.mp3
+### Details & instructions
+[Example](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
 
-File Types:
- * input: `wav`, `mp3`, `m4a`, `ogg`  (all but wav require ffmpeg to convert, For windows, look here:  https://phoenixnap.com/kb/ffmpeg-windows)
- * output:  `wav`
+1. Run:    ```python stretcher.py```
 
-Run:
+2. Click the wave or spectrum to start/stop.  Hit 'h' for help.
 
-    python stretcher.py
-
-[Example](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png).
-
-Click the wave or spectrum to start/stop.  
-
-Slide the stretch-factor while it's playing.
+3. Slide the stretch-factor while it's playing.
