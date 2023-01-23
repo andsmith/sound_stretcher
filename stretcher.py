@@ -235,6 +235,7 @@ class StretchApp(object):
         Generate next sound buffer.
         :param n_samples:  Interpolated/spliced sound data
         """
+        # how far ahead to get buffer data
         t_end = self._playback_position_t + n_samples / self._sound.metadata.framerate / self._stretch_factor
         timestamps = np.linspace(self._playback_position_t, t_end, n_samples + 1)  # cache this?
 
