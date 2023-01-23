@@ -32,18 +32,19 @@ Sound sources:
  * https://up.wjbk.site/wiki/File:Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3
  * https://up.wjbk.site/wiki/File:Aphelocoma_californica_-_California_Scrub_Jay_XC110976.mp3
 
-## Instructions
+## instructions
 
-### Requirements
+### requirements
  * python 3.8
  * ffmpeg (for .wav, .ogg, and .m4a files), for windows, check here: https://phoenixnap.com/kb/ffmpeg-windows
  * python packages:  (TBD)
  
-### Details & instructions
+### steps
 
-0. Clone (`git clone git@github.com:andsmith/sound_stretcher`). Download the example sound files.
+1. Clone (`git clone git@github.com:andsmith/sound_stretcher`). 
 
-1. From the new folder, run:  `python stretcher.py`, click the opening screen to load a sound file.
-### Screenshot
+2. From the new folder, run:  `python stretcher.py`
+
+### screenshot
 ![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
 
