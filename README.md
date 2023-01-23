@@ -40,7 +40,7 @@ Sound sources:
 
 0. Clone (`git clone git@github.com:andsmith/sound_stretcher`). Download the example sound files.
 
-1. From the new folder, run:  `python stretcher.py```, click the opening screen to load a sound file.
+1. From the new folder, run:  `python stretcher.py`, click the opening screen to load a sound file.
 ### Screenshot
 ![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
 
