@@ -202,6 +202,34 @@ class Sound(object):
         logging.info("\tWrote %.4f seconds of audio data (%i samples)." % (duration, new_params.nframes))
         return filename
 
+    def draw_waveform(self, image, bbox=None, color=(255, 255, 255, 255)):
+        """
+        Draw waveform on an image, in 2 colors.
+        :param image:  draw on this image
+        :param bbox:  dict with 'top', 'bottom','left','right', bounds within image to draw (scaled to max amplitude)
+        :param color: draw waveform  in this color
+        """
+        if bbox is None:
+            bbox = {'top': 0, 'bottom': image.shape[0], 'left': 0, 'right': image.shape[1]}
+
+        data = self.get_mono_data()
+        audio_mean = np.mean(data)
+        # bin audio into number of horizontal pixels, get max & min for each one
+        width = bbox['right'] - bbox['left']
+
+        bin_size = int(data.size / width)
+        partitions = data[:bin_size * width].reshape(width, bin_size)
+        max_vals, min_vals = np.max(partitions - audio_mean, axis=1), np.min(partitions - audio_mean, axis=1)
+        audio_max, audio_min = np.max(max_vals), np.min(min_vals)
+
+        y_center = int((bbox['bottom'] + bbox['top']) / 2)
+        y_height = int((bbox['bottom'] - bbox['top']) / 2) * .95
+        y_values_high = y_center + np.int64(max_vals / audio_max * y_height)
+        y_values_low = y_center - np.int64(min_vals / audio_min * y_height)
+
+        for x in range(bbox['left'], bbox['right']):
+            image[y_values_low[x]:y_values_high[x] - 1, x, :] = color
+
 
 def get_encoding_type(wav_params):
     """

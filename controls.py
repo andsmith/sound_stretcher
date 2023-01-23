@@ -133,6 +133,7 @@ class ControlPanel(object):
         y_div_lines = np.linspace(self._box['top'], self._box['bottom'], n + 1).astype(np.int64)
         ctrl = []
         for i, control in enumerate(Layout.CONTROLS):
+            print("\n\n", i, control)
             box = {'top': y_div_lines[i],
                    'bottom': y_div_lines[i + 1],
                    'left': self._box['left'],

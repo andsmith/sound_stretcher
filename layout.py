@@ -45,9 +45,7 @@ class Layout(object):
                            'height': 15},
            'spectrogram_params': {'plot_freq_range_hz': (0., 13750.),
                                   'time_resolution_sec': 0.001,
-                                  'frequency_resolution_hz': 110.0},
-           'segmentation_params': {'smoothing_kern_width_sec': 0.02,
-                                   'margin_sec': 0.0}}  # buggy?
+                                  'frequency_resolution_hz': 110.0}}
 
     CONTROLS = [{'name': 'stretch_factor',
                  'label': 'stretch factor: %.2f',
@@ -55,16 +53,17 @@ class Layout(object):
                  'resolution': 0.25,
                  'init': 1.0,
                  'sample_value': 10.0,  # large test value for text fitting
-                 'text_width': 250},
-
-                {'name': 'noise_threshold',
-                 'label': 'sound threshold: %.4f',
-                 'range': (0.0, 1.),
-                 'sample_value': .777,
-                 'resolution': .01,
-                 'smoothing_sec': 0.01,  # sd of gaussian smoothing kernel
-                 'init': .00,
                  'text_width': 250}]
+    '''
+    {'name': 'noise_threshold',
+     'label': 'sound threshold: %.4f',
+     'range': (0.0, 1.),
+     'sample_value': .777,
+     'resolution': .01,
+     'smoothing_sec': 0.01,  # sd of gaussian smoothing kernel
+     'init': .00,
+     'text_width': 250}
+     '''
 
     @staticmethod
     def get_color(name):
