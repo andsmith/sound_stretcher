@@ -39,6 +39,11 @@ def _debug_sandbox():
 
 
 def _compare_params():
+    """
+    Show spectrogram at several different resolutions
+    :return:
+    :rtype:
+    """
     sound = Sound("Aphelocoma_californica_-_California_Scrub_Jay_-_XC110976.wav")
     resolutions = [100., 128., 170.]
     time_res = [0.001, 0.0005, 0.00025]

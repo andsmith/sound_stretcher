@@ -27,7 +27,6 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
              floats - array of t window times (window centers)
     """
     frame_rate = float(frame_rate)
-    duration_sec = data.size / frame_rate
 
     window_size = int(frame_rate / resolution_hz)
     window_size += (window_size % 2)  # make even
@@ -42,8 +41,8 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
     remainder = chunk_size - window_size
     chunk_size -= remainder % overlap
 
-    logging.info("Calculating power spectrum for %.4f sec  (%i samples), %i-wide windows, at %i-sample intervals" %
-                 (duration_sec, data.size, window_size, step_size))
+    logging.info("Calculating power spectrum for %i samples, %i-wide windows, at %i-sample intervals" %
+                 (data.size, window_size, step_size))
 
     # calculate the timestamp of each column of the power spectrum
     window_center_inds = np.arange(padding_samples, data.size, window_size - overlap)  # indices

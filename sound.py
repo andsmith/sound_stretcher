@@ -35,7 +35,7 @@ class SoundPlayer(object):
     @staticmethod
     def from_sound(sound, sample_generator, frames_per_buffer=None):
         """
-        Init with params loaded from file.
+        Init player with params loaded from file.
         :param sound: Sound object
         :param sample_generator:  see __init__
         :param frames_per_buffer:  see __init
@@ -95,7 +95,7 @@ class Sound(object):
         if filename is not None:
             self._filename = filename
             self.data, self.metadata, self.data_raw = Sound._read_sound(filename)
-            self.duration_sec = self.metadata.nframes / float(self.metadata.framerate)
+            self.duration_sec = (self.metadata.nframes-1) / float(self.metadata.framerate)
         else:
             self._filename = None
             self.metadata = _wave_params(framerate=framerate, sampwidth=sampwidth, comptype=comptype,
