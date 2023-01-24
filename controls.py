@@ -98,6 +98,12 @@ class Slider(object):
     def get_value(self):
         return self._value
 
+    def set_value(self,value):
+        if not self._props['range'][0] <= value <= self._props['range'][1]:
+            raise Exception("Set value outside range (%s): %s" % (self.name, value))
+        logging.info("Control %s setting value to %s." % (self.name, value))
+        self._value = value
+
     def mouse(self, event, x, y):
         """
         Process user moving mouse.
@@ -182,7 +188,7 @@ class ControlPanel(object):
     Read list of controls from layout.py, initialize where they will go in the window, etc.
     """
 
-    def __init__(self, update_callback, region):
+    def __init__(self, update_callback, region, init_values=None):
         """
         Initialize all controls.
         :param update_callback: Call this function when a user interacts and changes a value.
@@ -191,9 +197,9 @@ class ControlPanel(object):
         self._callback = update_callback
         self._bbox = region
         self._clicked_ind = 0
-        self._controls = self._make_controls()
+        self._controls = self._make_controls(init_values)
 
-    def _make_controls(self):
+    def _make_controls(self, init_values=None):
         """
         Space everything out evenly for now.
         layout defined by list of lists (rows, columns) in Layout.CONTROLS
@@ -214,8 +220,10 @@ class ControlPanel(object):
                        'left': x_left,
                        'right': x_left + control_width}
                 logging.info("Making control (%i, %i):  %s @%s" % (row_i, col_i, control['name'], box))
-
-                ctrl.append(Slider(box, control))
+                c = Slider(box, control)
+                if init_values is not None and control['name'] in init_values:
+                    c.set_value(init_values[control['name']])
+                ctrl.append(c)
 
         return ctrl
 

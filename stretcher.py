@@ -115,7 +115,7 @@ class StretchApp(object):
         :param name:  name of param
         :param value: new value
         """
-        logging.info("Changing %s:  %.2f" % (name, value,))
+        #logging.info("Changing %s:  %.2f" % (name, value,))
 
         if name == 'stretch_factor':
             self._set_stretch(value)
@@ -281,6 +281,7 @@ class StretchApp(object):
         visualize the STFT result
         """
         contrast_range = self._controls.get_control('spectrogram_contrast').get_prop('range')
+
         def _scale_z2n_values(z2n, contrast):
             """
             Scale unit intensities, by 1 of two methods:
@@ -293,17 +294,17 @@ class StretchApp(object):
             :return: scaled values (floats)
             """
             if contrast < 0:
-                contrast = (1.-contrast)
+                contrast = (1. - contrast)
                 # padded log scaling, then normalize
-                print(contrast,np.max(z2n),np.min(z2n))
+                print(contrast, np.max(z2n), np.min(z2n))
                 image_f = np.log(contrast + z2n)
                 return image_f / np.max(image_f)
 
             else:  # raw / alpha scaling of normalized values
                 # reverse range, so looks better next to log
-                contrast = contrast_range[1]-contrast
+                contrast = contrast_range[1] - contrast
                 image_f = z2n / np.max(z2n)
-                alpha = 1.0/(contrast + 1.0)
+                alpha = 1.0 / (contrast + 1.0)
                 return image_f ** alpha
 
         logging.info("Generating new spectrogram master image, contrast=%.2f" % (self._spectrogram_contrast,))
@@ -425,9 +426,13 @@ class StretchApp(object):
             ipdb.set_trace()
         elif k & 0xff == ord(' '):
             if self._state == StretchAppStates.idle:
-                self._start_playback(0.0)
+                # pause, restart at same position (if mouse not on spectrogram)
+                self._playback_position_t =self._mouse_cursor_t if self._mouse_cursor_t is not None else 0.0
+
+                self._start_playback(self._playback_position_t)
                 self._state = StretchAppStates.playing
             elif self._state == StretchAppStates.playing:
+                self._mouse_cursor_t = self._playback_position_t  # so spectrogram doesn't jump
                 self._stop_playback()
                 self._state = StretchAppStates.idle
         elif k & 0xff == ord('l'):
@@ -440,25 +445,17 @@ class StretchApp(object):
             frame = np.zeros((self._window_size[1], self._window_size[0], 4), dtype=np.uint8)
             self._help.add_help(frame)
         elif self._state == StretchAppStates.busy:
+            # a thread is finishing a task so just show previous frame with message about task
             frame = self._last_frame.copy()
             text = self._messages[self._cur_msg]
             text.write_text(frame)
-        else:
-            frame = self._bkg.copy()
-        if self._state in [StretchAppStates.playing, StretchAppStates.idle]:
 
-            # Draw spectrogram
-            if self._spectrogram_master_image is not None:
-                spectrogram_img = self._spectrogram_master_image[self._valid_freqs, :]
-                spectrogram_img = cv2.resize(spectrogram_img, self._spectrogram_size, cv2.INTER_CUBIC)[::-1, :, ::-1]
-
-                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
-                self._spectrogram_area['left']:self._spectrogram_area['right'], :3] = spectrogram_img
-                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
-                self._spectrogram_area['left']:self._spectrogram_area['right'], 3] = 255
-
+        else:  # if self._state in [StretchAppStates.playing, StretchAppStates.idle]:
+            # copy the static part of the background to draw on
             mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
             playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
+
+            frame = self._bkg.copy()
 
             # draw mouse cursor
             if self._mouse_cursor_t is not None:
@@ -466,10 +463,35 @@ class StretchApp(object):
 
                 draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, mouse_cursor_color,
                             y_range=self._waveform_area)
+
+            # Draw spectrogram
+            if self._spectrogram_master_image is not None:
+                # where is the time marker on the spectrogram
+                marker_t = self._playback_position_t if self._state == StretchAppStates.playing else self._mouse_cursor_t
+
+                spec_left_t, spec_right_t = self._get_spectrogram_t_range(marker_t)
+                spec_left = np.sum(self._spectrogram_raw['t'] < spec_left_t)
+                spec_right = np.sum(self._spectrogram_raw['t'] < spec_right_t)
+                spectrogram_img = self._spectrogram_master_image[self._valid_freqs, spec_left: spec_right]
+                spectrogram_img = cv2.resize(spectrogram_img, self._spectrogram_size, cv2.INTER_CUBIC)[::-1, :, ::-1]
+
+                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
+                self._spectrogram_area['left']:self._spectrogram_area['right'], :3] = spectrogram_img
+                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
+                self._spectrogram_area['left']:self._spectrogram_area['right'], 3] = 255
+
+                # draw playback time marker on spectrogram
+                if self._state == StretchAppStates.playing:
+                    rel_pos = (self._playback_position_t - spec_left_t) / (spec_right_t - spec_left_t)
+                    playback_line_x = int(rel_pos * self._spectrogram_size[0]) + self._spectrogram_area['left']
+                    draw_v_line(frame, playback_line_x, int(Layout.CURSOR_WIDTH * self._stretch_factor),
+                                playback_cursor_color,
+                                y_range=self._spectrogram_area)
+
             # draw controls
             self._controls.draw(frame)
 
-            # draw playback time marker
+            # draw playback time marker on wave
             if self._state == StretchAppStates.playing:
                 playback_line_x = self._get_pos_from_time(self._playback_position_t)
                 draw_v_line(frame, playback_line_x, Layout.CURSOR_WIDTH, playback_cursor_color,
@@ -479,6 +501,23 @@ class StretchApp(object):
             self._help.add_help(frame)
 
         return frame
+
+    def _get_spectrogram_t_range(self, pos_t):
+        """
+        Zoom in (time) by stretch factor.
+        Keep range centered around position.
+        :param pos_t: float in [0, self._sound.duration_sec]
+        :return: (t_left, t_right) to display spectrogram
+        """
+        span = self._sound.duration_sec / self._stretch_factor
+        t_left, t_right = pos_t - span / 2, pos_t + span / 2
+        if t_left<0:
+            t_left=0
+            t_right = t_left+span
+        if t_right>self._sound.duration_sec:
+            t_right = self._sound.duration_sec
+            t_left = t_right-span
+        return t_left, t_right
 
     def _save(self):
         """

@@ -121,8 +121,8 @@ def get_font_scale(lines, width, height, v_spacing_pixels, font, thickness, font
 
         if text_width > width or text_height > height:
             font_scale *= 0.95
-            logging.info("Text (%i x %i) too big for box (%i x %i), shrinking font scale to:  %.3f" % (
-                text_width, text_height, width, height, font_scale,))
+            # logging.info("Text (%i x %i) too big for box (%i x %i), shrinking font scale to:  %.3f" % (
+            #    text_width, text_height, width, height, font_scale,))
         else:
             too_big = False
             break
