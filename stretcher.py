@@ -53,21 +53,15 @@ class StretchApp(object):
         # window/area sizes
         self._window_size = Layout.get_value('window_size')
 
-        def _get_region_dims_abs(dims_rel):
-            return {'top': int(dims_rel['top'] * self._window_size[1]),
-                    'bottom': int(dims_rel['bottom'] * self._window_size[1]),
-                    'left': int(dims_rel['left'] * self._window_size[0]),
-                    'right': int(dims_rel['right'] * self._window_size[0])}
-
-        self._msg_area = _get_region_dims_abs(Layout.get_value("msg_area_rel"))
-        self._waveform_area = _get_region_dims_abs(Layout.get_value('wave_area_rel'))
-        self._spectrum_area = _get_region_dims_abs(Layout.get_value('spectrum_area_rel'))
-        self._control_area = _get_region_dims_abs(Layout.get_value('control_area_rel'))
-        self._interaction_area = _get_region_dims_abs(Layout.get_value('interaction_area_rel'))
-
+        self._msg_area = Layout.get_value("msg_area")
+        self._waveform_area = Layout.get_value('wave_area')
+        self._spectrogram_area = Layout.get_value('spectrum_area')
+        self._control_area = Layout.get_value('control_area')
+        self._spectrogram_size = self._spectrogram_area['right'] - self._spectrogram_area['left'], \
+                                 self._spectrogram_area['bottom'] - self._spectrogram_area['top']
         self._controls = ControlPanel(self._control_update, self._control_area)
         self._help = HelpDisplay(self._window_size[::-1])
-
+        self._valid_freqs = None  # stored for spectrogram
         self._sound = None  # Sound() object
         self._interps = None  # list of interp1d objects to interpolate each channel
         self._bkg = None  # app background image
@@ -107,28 +101,40 @@ class StretchApp(object):
         # user params
         self._stretch_factor = self._controls.get_value('stretch_factor')
         self._spectrogram_contrast = self._controls.get_value('spectrogram_contrast')
-        self._spectrogram_max_freq = self._controls.get_value('spectrogram_limit')
+        self._spectrogram_limit = self._controls.get_value('spectrogram_limit')
+        self._spectrogram_shift = self._controls.get_value('spectrogram_shift')
 
         # start app
         self._last_stretch_factor = self._stretch_factor  # for smoother transitions, interpolate
+        logging.info("Stretcher init complete.")
         self._run()
 
     def _control_update(self, name, value):
         """
-        Control panel is updating our params (callback), take other appropriate action for each, etc.
+        User/control panel is updating our params (callback), take other appropriate action for each, etc.
         :param name:  name of param
         :param value: new value
         """
+        logging.info("Changing %s:  %.2f" % (name, value,))
+
         if name == 'stretch_factor':
             self._set_stretch(value)
         if name == 'spectrogram_contrast':
-            logging.info("Changing spectrogram contrast to:  %.2f" % (value,))
             self._spectrogram_contrast = value
-            # self._rebuild_spectrogram_image()
+            self._rebuild_spectrogram_image()
         if name == 'spectrogram_limit':
-            logging.info("Changing spectrogram upper limit to:  %.1f Hz" % (value,))
             self._spectrogram_limit = value
-            # self._rebuild_spectrogram_image()
+            self._recompute_valid_spectrogram_frquencies()
+        if name == 'spectrogram_shift':
+            self._spectrogram_shift = value
+            self._recompute_valid_spectrogram_frquencies()
+
+    def _recompute_valid_spectrogram_frquencies(self):
+        shift = self._spectrogram_shift * self._spectrogram_limit
+        self._valid_freqs = np.logical_and(1.0 <= self._spectrogram_raw['f'] - shift,
+                                           self._spectrogram_raw['f'] - shift <= self._spectrogram_limit)
+        if np.sum(self._valid_freqs) == 0:
+            self._valid_freqs[0] = True
 
     def _get_time_from_pos(self, mouse_x):
         """
@@ -167,7 +173,6 @@ class StretchApp(object):
             if event == cv2.EVENT_MOUSEMOVE:
                 if self._sound is not None:
                     self._mouse_cursor_t = self._get_time_from_pos(x)
-
 
             # check for clicks
             if event == cv2.EVENT_LBUTTONUP:
@@ -212,8 +217,15 @@ class StretchApp(object):
             self._bkg = self._get_background()
 
             # do analysis for spectrogram & create master image
+
             self._spectrogram_raw = self._get_power_spectrum()
-            # self._rebuild_spectrogram_image()
+            freq_max_subset = np.logical_and(1.0 <= self._spectrogram_raw['f'],
+                                             self._spectrogram_raw['f'] <= Layout.MAX_SPECTROGRAM_FREQ)
+            self._spectrogram_raw['power'] = np.abs(self._spectrogram_raw['z'][freq_max_subset, :])
+            logging.info("Created new raw spectrogram:  %s (F x T)" % (self._spectrogram_raw['power'].shape[:2],))
+            self._recompute_valid_spectrogram_frquencies()
+
+            self._rebuild_spectrogram_image()
 
             # create interpolation objects
             time_indices = np.linspace(0,
@@ -259,7 +271,8 @@ class StretchApp(object):
         z, freqs, times = get_power_spectrum(self._sound.get_mono_data(),
                                              self._sound.metadata.framerate,
                                              resolution_hz=hz_res,
-                                             resolution_sec=t_res)
+                                             resolution_sec=t_res,
+                                             freq_range=(1.0, Layout.MAX_SPECTROGRAM_FREQ))
         z = np.abs(z)
         return {'z': z, 'f': freqs, 't': times}
 
@@ -267,49 +280,37 @@ class StretchApp(object):
         """
         visualize the STFT result
         """
-
+        contrast_range = self._controls.get_control('spectrogram_contrast').get_prop('range')
         def _scale_z2n_values(z2n, contrast):
             """
             Scale unit intensities, by 1 of two methods:
 
                 if contrast < 0, return np.log(-contrast + z2n)
-                else return z2n^(1+contrast)   (alpha correction)
+                else return z2n^(-1-contrast)   (alpha correction)
 
             :param z2n: |z|^2 values scaled to [0, 1]
             :param contrast: float
-            :return: scaled values
+            :return: scaled values (floats)
             """
             if contrast < 0:
-                # padded log scaling
-                return np.log(-contrast + z2n)
-            else:  # raw / alpha scaling
-                alpha = contrast + 1.0
-                return z2n ** alpha
+                contrast = (1.-contrast)
+                # padded log scaling, then normalize
+                print(contrast,np.max(z2n),np.min(z2n))
+                image_f = np.log(contrast + z2n)
+                return image_f / np.max(image_f)
 
-        desired_freqs = (1.0 <= self._spectrogram_raw['f'] <= self._spectrogram_limit)
-        logging.info("Generating new spectrogram master image, with f in %s, contrast=%.2f" % (
-            desired_freqs, self._spectrogram_contrast))
-        z2 = np.abs(self._spectrogram_raw['z'][desired_freqs, :]) ** 2.0
-        z2n = z2 / np.max(z2)
-        image_float = _scale_z2n_values(z2n, self._spectrogram_contrast)
-        self._spectrogram_master_image = (image_float * 255.0).astype(np.uint8)
+            else:  # raw / alpha scaling of normalized values
+                # reverse range, so looks better next to log
+                contrast = contrast_range[1]-contrast
+                image_f = z2n / np.max(z2n)
+                alpha = 1.0/(contrast + 1.0)
+                return image_f ** alpha
+
+        logging.info("Generating new spectrogram master image, contrast=%.2f" % (self._spectrogram_contrast,))
+        image_float = _scale_z2n_values(self._spectrogram_raw['power'], self._spectrogram_contrast)
+        image = (image_float * 255.0).astype(np.uint8)
+        self._spectrogram_master_image = cv2.applyColorMap(image, cv2.COLORMAP_HOT)
         logging.info("\tdone generating master image.")
-
-    def _add_current_spectrogram_image(self, frame):
-        return
-        # update position
-        # if self._state in [StretchAppStates.idle]:
-        # move towards mouse cursor
-        # get subset
-        #
-
-        spectrum_image = cv2.resize(image, dest_dims, cv2.INTER_CUBIC)[::-1, :, ::-1]
-
-        frame[self._spectrum_area['top']:  self._spectrum_area['bottom'],
-        self._spectrum_area['left']:  self._spectrum_area['right'], :3] = spectrum_image
-
-        frame[self._spectrum_area['top']:  self._spectrum_area['bottom'],
-        self._spectrum_area['left']:  self._spectrum_area['right'], 3] = 255
 
     def _start_playback(self, begin_t=0.):
         """
@@ -444,14 +445,22 @@ class StretchApp(object):
             text.write_text(frame)
         else:
             frame = self._bkg.copy()
-
-        # Draw spectrogram here
-
-        mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
-        playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
-
         if self._state in [StretchAppStates.playing, StretchAppStates.idle]:
-            # draw mouse
+
+            # Draw spectrogram
+            if self._spectrogram_master_image is not None:
+                spectrogram_img = self._spectrogram_master_image[self._valid_freqs, :]
+                spectrogram_img = cv2.resize(spectrogram_img, self._spectrogram_size, cv2.INTER_CUBIC)[::-1, :, ::-1]
+
+                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
+                self._spectrogram_area['left']:self._spectrogram_area['right'], :3] = spectrogram_img
+                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
+                self._spectrogram_area['left']:self._spectrogram_area['right'], 3] = 255
+
+            mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
+            playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
+
+            # draw mouse cursor
             if self._mouse_cursor_t is not None:
                 mouse_line_x = self._get_pos_from_time(self._mouse_cursor_t)
 

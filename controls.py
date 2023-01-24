@@ -41,7 +41,7 @@ class Slider(object):
         self._text_bbox['right'] = self._text_bbox['left'] + props['text_width']
         assert self._text_bbox['right'] <= self._box['right']
         test_string = props['label'] % props['sample_value']
-        logging.info("Fitting text box for slider %s with sample lines:  %s" % (self._props['name'], test_string))
+        # logging.info("Fitting text box for slider %s with sample lines:  %s" % (self._props['name'], test_string))
         # if self._props['name']=='spectrogram_contrast':
         #    import ipdb; ipdb.set_trace()
         self._set_font_scale(test_string=test_string)
@@ -91,6 +91,9 @@ class Slider(object):
                                                          self._font, 1)
 
         self._y_offset = get_centered_offset(self._text_bbox, self._spacing, v_spacing)[1]
+
+    def get_prop(self, prop):
+        return self._props[prop]
 
     def get_value(self):
         return self._value
@@ -158,7 +161,6 @@ class Slider(object):
         v_spacing = Layout.get_value('control_text_spacing')
 
         for line_no, ((_, height), baseline) in enumerate(self._spacing):
-
             y += height
             x = self._text_x - int(widths[line_no] / 2)
             cv2.putText(image, lines[line_no], (x, y), self._font, self._font_scale, self._text_color, 1, cv2.LINE_AA)
@@ -203,7 +205,7 @@ class ControlPanel(object):
         for row_i, control_row in enumerate(Layout.CONTROLS):
             n_cols = len(control_row)
             width = self._bbox['right'] - self._bbox['left']
-            control_width = int((width - (n_cols - 1) * h_spacing)/n_cols)
+            control_width = int((width - (n_cols - 1) * h_spacing) / n_cols)
 
             for col_i, control in enumerate(control_row):
                 x_left = col_i * (control_width + h_spacing)
@@ -211,17 +213,20 @@ class ControlPanel(object):
                        'bottom': y_div_lines[row_i + 1],
                        'left': x_left,
                        'right': x_left + control_width}
-                logging.info("\tControl (%i, %i):  %s @%s" % (row_i, col_i, control['name'], box))
+                logging.info("Making control (%i, %i):  %s @%s" % (row_i, col_i, control['name'], box))
 
                 ctrl.append(Slider(box, control))
 
         return ctrl
 
-    def get_value(self, name):
+    def get_control(self, name):
         ctrl = [c for c in self._controls if c.name == name]
         if len(ctrl) != 1:
             raise Exception("Control not found:  %s" % (name,))
-        return ctrl[0].get_value()
+        return ctrl[0]
+
+    def get_value(self, name):
+        return self.get_control(name).get_value()
 
     def mouse(self, event, x, y):
         for ctrl_i, control in enumerate(self._controls):

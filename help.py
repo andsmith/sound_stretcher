@@ -8,17 +8,17 @@ from layout import Layout
 class HelpDisplay(object):
     HELP = ('Sound Stretcher ',
             '',
-            '   Click this screen to open file...',
+            '   * Click this screen to open file...',
             '',
-            '   Hotkeys:',
-            '     (space) - Play / Stop',
-            '           h - toggle this help',
-            '           l - load new sound file',
-            '           s - save',
-            '           q - quit',
+            '   * Hotkeys:',
             '',
+            '       (space) - Play from start / Stop',
+            '       h - toggle this help',
+            '       l - load new sound file',
+            '       s - save sound w/current settings',
+            '       q - quit',
             '',
-            'file types: .wav (w/ffmpeg:  .mp3, .m4a, and .ogg)')
+            '   * File types: .wav (w/ffmpeg .mp3, .m4a, and .ogg)')
 
     def __init__(self, frame_shape):
         """
@@ -33,7 +33,7 @@ class HelpDisplay(object):
         self._text_col = Layout.get_color('help_text')
         self._text_box = TextBox(box_dims, HelpDisplay.HELP,
                                  bkg_color=self._bkg_col, text_color=self._text_col,
-                                 font=self._font)
+                                 font=self._font, font_scale=2.0)
 
     def add_help(self, image):
         if image.shape[:2] != self._shape:

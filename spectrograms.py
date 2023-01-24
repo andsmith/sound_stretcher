@@ -4,7 +4,7 @@ import logging
 from sound import Sound
 
 
-def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0005, freq_range=(0, 10000.0),
+def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0005, freq_range=None,
                        max_stft_size=50000):
     """
     Get a short-time fft (i.e. with a sliding window) of a signal.
@@ -19,7 +19,7 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
     :param frame_rate:  frames per sec
     :param resolution_hz:  Spectrum will bin frequencies in bins of this size.
     :param resolution_sec:  Window will slide along in steps of this duration.
-    :param freq_range:  return frequencies in this band (float low, float high)
+    :param freq_range:  return frequencies in this band (float low, float high), or None for all
     :param max_stft_size:  If data.size > max_stft_size, do calculation piecewise (avoid memory blow-up)
 
     :return: complex - f x t array of z values (fft-result), where f and t are:
@@ -74,9 +74,10 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
         assert (t.size - 1 == (w_end - w_start))
 
         # prune frequencies
-        f_range = np.sum(f < freq_range[0]), np.sum(f < freq_range[1])
-        f = f[f_range[0]:f_range[1]]
-        z = z[f_range[0]:f_range[1], :]
+        if freq_range is not None:
+            f_range = np.sum(f < freq_range[0]), np.sum(f < freq_range[1])
+            f = f[f_range[0]:f_range[1]]
+            z = z[f_range[0]:f_range[1], :]
 
         return f, t, z
 
@@ -100,6 +101,7 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
 
         if next_w_ind >= window_center_inds.size:
             break
+
 
     frequencies = freqs
     z_values = np.hstack(z_vals)

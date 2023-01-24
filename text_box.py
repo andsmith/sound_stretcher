@@ -12,7 +12,7 @@ class TextBox(object):
     """
 
     def __init__(self, box_dims, text_lines, bkg_color=(64, 64, 64, 200), text_color=(255, 255, 255, 255),
-                 font=cv2.FONT_HERSHEY_COMPLEX, thickness=1, line_style=cv2.LINE_AA, ):
+                 font=cv2.FONT_HERSHEY_COMPLEX, thickness=1, line_style=cv2.LINE_AA, font_scale=1.0):
         """
         Create a text box in a specific place on the image.  (can change text/font)
         :param box_dims:  dict('top','bottom','left','right') in pixels, where text will go
@@ -37,6 +37,7 @@ class TextBox(object):
                                                              self._spacing['right_indent'],
                                                        height=self._box_height - 2.0 * self._spacing['v_indent'],
                                                        v_spacing_pixels=self._spacing['v_spacing_pixels'],
+                                                       font_scale=font_scale,
                                                        **self._font)
         self._bkg_color, self._text_color = bkg_color, text_color
         self._overlay_weighted, self._bkg_weights = self._draw_overlay_box(text_lines)
@@ -56,7 +57,7 @@ class TextBox(object):
                         self._font['thickness'],
                         self._line_style)
             # add baseline & extra spacing
-            y += self._sizes[line_ind][0][1] + self._spacing['v_spacing_pixels']
+            y += self._sizes[line_ind][1] + self._spacing['v_spacing_pixels']
 
         alpha = np.expand_dims(img[:, :, 3] / 255., 2)
         img_weighted = img[:, :, :3] * alpha
@@ -91,7 +92,7 @@ def get_centered_offset(bbox, sizes, v_spacing):
     :param v_spacing:  this many pixels between lines of text
     :return: (x, y)
     """
-    height = np.sum([size[0][1]+size[1] for size in sizes]) + v_spacing * (len(sizes) - 1)  # height + baseline
+    height = np.sum([size[0][1] + size[1] for size in sizes]) + v_spacing * (len(sizes) - 1)  # height + baseline
     width = np.max([size[0][0] for size in sizes])
     return int((bbox['right'] - bbox['left'] - width) / 2.), int((bbox['bottom'] - bbox['top'] - height) / 2.),
 
@@ -116,7 +117,7 @@ def get_font_scale(lines, width, height, v_spacing_pixels, font, thickness, font
 
         # background_rect
         text_width = np.max([size[0][0] for size in sizes])
-        text_height = np.sum([size[0][1]+ size[1] for size in sizes]) + (len(sizes) - 1) * v_spacing_pixels
+        text_height = np.sum([size[0][1] + size[1] for size in sizes]) + (len(sizes) - 1) * v_spacing_pixels
 
         if text_width > width or text_height > height:
             font_scale *= 0.95
