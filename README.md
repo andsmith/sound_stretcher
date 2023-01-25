@@ -15,18 +15,18 @@ This was originally written for listening to birdsong, to bring both the incompr
 * [California scrub-jays](https://up.wjbk.site/w/index.php?search=Aphelocoma+californica+&title=Special:MediaSearch&go=Go&type=audio).
 ## demo
 
-* The Nightengale (links to video):
-
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=CmNeWOfX8ig
-" target="_blank"><img src="http://img.youtube.com/vi/CmNeWOfX8ig/0.jpg" 
-alt="SoundStretcher running on Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3" width="240" height="180" border="10" /></a>
-  
 * The California Scrub-Jay:
 
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=sY8alPmSitY
 " target="_blank"><img src="http://img.youtube.com/vi/sY8alPmSitY/0.jpg" and
 alt="SoundStretcher running on Aphelocoma_californica_-_California_Scrub_Jay_XC110976.mp3" width="240" height="180" border="10" /></a>
 
+* The Nightengale (links to video):
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=CmNeWOfX8ig
+" target="_blank"><img src="http://img.youtube.com/vi/CmNeWOfX8ig/0.jpg" 
+alt="SoundStretcher running on Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3" width="240" height="180" border="10" /></a>
+  
 Sound sources:
 
  * https://up.wjbk.site/wiki/File:Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3
