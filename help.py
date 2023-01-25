@@ -18,7 +18,7 @@ class HelpDisplay(object):
             '       s - save sound w/current stretch',
             '       q - quit',
             '',
-            '   * File types: .wav (w/ffmpeg .mp3, .m4a, and .ogg)')
+            '   * File types: .wav (w/ffmpeg .mp3, .m4a, and .ogg/.oga)')
 
     def __init__(self, frame_shape):
         """

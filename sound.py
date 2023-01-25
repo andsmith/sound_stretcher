@@ -88,7 +88,7 @@ class Sound(object):
     """
     Class to hold data from a sound file
     """
-    EXTENSIONS = ['.m4a', '.ogg', '.mp3']
+    EXTENSIONS = ['.m4a', '.ogg', '.mp3', '.oga']
 
     def __init__(self, filename=None, framerate=44100, sampwidth=2, nchannels=1, comptype='NONE',
                  compname='not compressed'):
