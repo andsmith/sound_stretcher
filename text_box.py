@@ -12,7 +12,7 @@ class TextBox(object):
     """
 
     def __init__(self, box_dims, text_lines, bkg_color=(64, 64, 64, 200), text_color=(255, 255, 255, 255),
-                 font=cv2.FONT_HERSHEY_COMPLEX, thickness=1, line_style=cv2.LINE_AA, font_scale=1.0):
+                 font=cv2.FONT_HERSHEY_COMPLEX, thickness=1, line_style=cv2.LINE_AA, font_scale=1.0, centered=False):
         """
         Create a text box in a specific place on the image.  (can change text/font)
         :param box_dims:  dict('top','bottom','left','right') in pixels, where text will go
@@ -40,14 +40,16 @@ class TextBox(object):
                                                        font_scale=font_scale,
                                                        **self._font)
         self._bkg_color, self._text_color = bkg_color, text_color
-        self._overlay_weighted, self._bkg_weights = self._draw_overlay_box(text_lines)
+        self._overlay_weighted, self._bkg_weights = self._draw_overlay_box(text_lines, centered=centered)
 
-    def _draw_overlay_box(self, text_lines):
+    def _draw_overlay_box(self, text_lines, centered=False):
         img = np.zeros((self._box_height, self._box_width, 4)) + np.array(self._bkg_color, dtype=np.uint8)
 
         # text lines
-        x = self._spacing['left_indent']
-        y = self._spacing['v_indent']
+        if centered:
+            x, y = get_centered_offset(self._box_dims, self._sizes, self._spacing['v_spacing_pixels'])
+        else:
+            x, y = self._spacing['left_indent'], self._spacing['v_indent']
         for line_ind, line in enumerate(text_lines):
             # add text line height
             y += self._sizes[line_ind][0][1]

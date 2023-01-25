@@ -47,8 +47,8 @@ class Layout(object):
 
     # misc key-value look-up
     _LUT = {'window_size': WINDOW_SIZE,
-            'msg_area': {'top': int(WINDOW_SIZE[1] / 4), 'bottom': int(WINDOW_SIZE[1] / 4 * 3),
-                         'left': int(WINDOW_SIZE[0] / 4), 'right': int(WINDOW_SIZE[0] / 4 * 3)},  # centered box
+            'msg_area': {'top': int(WINDOW_SIZE[1] /3), 'bottom': int(WINDOW_SIZE[1] / 3 * 2),
+                         'left': int(WINDOW_SIZE[0] / 3), 'right': int(WINDOW_SIZE[0] / 3 * 2)},  # centered box
 
             'wave_area': {'top': 0, 'bottom': WAVE_HEIGHT, 'left': 0, 'right': WINDOW_SIZE[0]},  # top band of window
             'spectrum_area': {'top': WAVE_HEIGHT, 'bottom': WINDOW_SIZE[1] - CONTROL_HEIGHT, 'left': 0,
@@ -109,7 +109,7 @@ class Layout(object):
                   'range': (0.01, 1.0),
                   'resolution': 0.01,
                   'init': 1.0,
-                  'sample_value': .77,
+                  'sample_value': 100.77,
                   'text_width': 100,
                   'total_width': 400},
 

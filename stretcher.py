@@ -82,10 +82,10 @@ class StretchApp(object):
                          'bkg_color': Layout.get_color('msg_bkg_color'),
                          'text_color': Layout.get_color('msg_text_color')}
         self._messages = {'loading': TextBox(box_dims=self._msg_area,
-                                             text_lines=['Loading /', 'Analyzing ..'],
+                                             text_lines=['loading & analyzing ...'], centered=True,
                                              **msg_font_info),
                           'saving': TextBox(box_dims=self._msg_area,
-                                            text_lines=['Saving..'],
+                                            text_lines=['saving ...'], centered=True,
                                             **msg_font_info)}
 
         self._cur_msg = None  # should be one of the keys in self._messages
@@ -165,7 +165,6 @@ class StretchApp(object):
 
     def _stop_playback(self):
         logging.info("Stopping playback.")
-        self._playback_position_t = None
         self._audio.stop()
 
     def _load_file(self):
@@ -225,7 +224,7 @@ class StretchApp(object):
         Thread(target=finish_loading).start()  # finish slow things in thread so UI keeps working
 
     def _get_zoom_t(self):
-        c =self._user_params['zoom_t']
+        c = self._user_params['zoom_t']
         f = exp_fact_from_control_value(c, Layout.ZOOM_POWERS_MAX)
         return f
 
@@ -465,7 +464,7 @@ class StretchApp(object):
             # copy the static part of the background to draw on
             mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
             playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
-            spectrogram_cursor_color= np.array(Layout.get_color('spectrogram_cursor'), dtype=np.uint8)
+            spectrogram_cursor_color = np.array(Layout.get_color('spectrogram_cursor'), dtype=np.uint8)
             frame = self._bkg.copy()
 
             # draw mouse cursor

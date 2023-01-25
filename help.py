@@ -3,10 +3,10 @@ import cv2
 import logging
 from text_box import TextBox
 from layout import Layout
-
+from version import VERSION
 
 class HelpDisplay(object):
-    HELP = ('Sound Stretcher ',
+    HELP = ('Sound Stretcher - %s' % (VERSION,),
             '',
             '   * Click this screen to open file...',
             '',
