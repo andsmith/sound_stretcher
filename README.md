@@ -36,7 +36,7 @@ Sound sources:
 
 ### requirements
  * python 3.8
- * ffmpeg (for .wav, .ogg, and .m4a files), for windows, check here: https://phoenixnap.com/kb/ffmpeg-windows
+ * ffmpeg (for .ogg, and .m4a files), for windows, check here: https://phoenixnap.com/kb/ffmpeg-windows
  * python packages:  (TBD)
  
 ### steps
