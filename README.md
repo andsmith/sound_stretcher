@@ -46,5 +46,5 @@ Sound sources:
 2. From the new folder, run:  `python stretcher.py`
 
 ### screenshot
-![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screenshot.png)
+![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screen.png)
 
