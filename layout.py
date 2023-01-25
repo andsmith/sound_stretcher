@@ -55,7 +55,7 @@ class Layout(object):
                               'right': WINDOW_SIZE[0]},  # middle band
             'control_area': {'top': WINDOW_SIZE[1] - CONTROL_HEIGHT, 'bottom': WINDOW_SIZE[1], 'left': 0,
                              'right': WINDOW_SIZE[0]},  # bottom band
-            'help_font': cv2.FONT_HERSHEY_TRIPLEX,
+            'help_font': cv2.FONT_HERSHEY_DUPLEX,
             'msg_font': cv2.FONT_HERSHEY_DUPLEX,
             'control_panel_font': cv2.FONT_HERSHEY_DUPLEX,
             'control_text_spacing': 5,  # pixels, line spacing in a label

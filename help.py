@@ -25,7 +25,7 @@ class HelpDisplay(object):
         :param frame_shape:  of wnidow
         """
         self._shape = frame_shape[:2]
-        margin_px = 40
+        margin_px = 100
         box_dims = {'top': margin_px, 'bottom': frame_shape[0] - margin_px,
                     'left': margin_px, 'right': frame_shape[1] - margin_px}
         self._font = Layout.get_value('help_font')
@@ -33,7 +33,7 @@ class HelpDisplay(object):
         self._text_col = Layout.get_color('help_text')
         self._text_box = TextBox(box_dims, HelpDisplay.HELP,
                                  bkg_color=self._bkg_col, text_color=self._text_col,
-                                 font=self._font, font_scale=2.0)
+                                 font=self._font, font_scale=2.0,thickness=1,line_style=cv2.LINE_AA)
 
     def add_help(self, image):
         if image.shape[:2] != self._shape:
