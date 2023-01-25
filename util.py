@@ -3,6 +3,18 @@ import os
 import numpy as np
 
 
+def exp_fact_from_control_value(x, n_powers_max, precision = 1):
+    """
+    For zooming in at exponential scales.
+
+    :param x: float in (0, 1.]
+    :param n_powers_max:  maximum zoom is 2 ** n_powers_max
+    :return:  zoom scale corresponding to control value x
+    """
+    factor = 2.0 ** (n_powers_max * (1.0 - x))
+    return factor
+
+
 def in_area(pos, bbox):
     """
     :returns: True if position is inside bounding box.

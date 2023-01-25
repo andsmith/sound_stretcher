@@ -12,10 +12,10 @@ class HelpDisplay(object):
             '',
             '   * Hotkeys:',
             '',
-            '       (space) - Play from start / Stop',
-            '       h - toggle this help',
+            '       (space) - Pause / Play',
+            '       h - show this help',
             '       l - load new sound file',
-            '       s - save sound w/current settings',
+            '       s - save sound w/current stretch',
             '       q - quit',
             '',
             '   * File types: .wav (w/ffmpeg .mp3, .m4a, and .ogg)')

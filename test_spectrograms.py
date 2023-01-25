@@ -23,17 +23,9 @@ def _debug_sandbox():
     logging.basicConfig(level=logging.INFO)
     sound = Sound("Aphelocoma_californica_-_California_Scrub_Jay_-_XC110976.wav")
 
-    z, f, t = get_power_spectrum(sound.get_mono_data()[:100000], sound.metadata.framerate, max_stft_size=20000)
-    z2, f2, t2 = get_power_spectrum(sound.get_mono_data()[:100000], sound.metadata.framerate, max_stft_size=30000)
+    z, f, t = get_power_spectrum(sound.get_mono_data(), sound.metadata.framerate)
 
-    plt.plot(np.diff(t))
-    plt.show()
-    ax = plt.subplot(1, 2, 1)
-    plt.imshow(np.log(4 + np.abs(z.T)), aspect='auto', origin='lower')
-    plt.subplot(1, 2, 2, sharex=ax, sharey=ax)
-    plt.imshow(np.log(4 + np.abs(z2.T)), aspect='auto', origin='lower')
-    plt.show()
-    plt.imshow(np.log(4 + np.abs(z2.T)) - np.log(4 + np.abs(z.T)), aspect='auto', origin='lower')
+    plt.imshow(np.log(1 + np.abs(z)), aspect='auto', origin='lower', extent=[t[0], t[-1], f[0], f[-1]])
     plt.colorbar()
     plt.show()
 
@@ -70,5 +62,6 @@ def _compare_params():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    # _debug_sandbox()
     test_spectrogram()
     print("All tests pass.")

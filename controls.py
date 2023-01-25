@@ -40,7 +40,7 @@ class Slider(object):
         self._text_bbox = bbox.copy()
         self._text_bbox['right'] = self._text_bbox['left'] + props['text_width']
         assert self._text_bbox['right'] <= self._box['right']
-        test_string = props['label'] % props['sample_value']
+        test_string = props['label'](props['sample_value'])
         # logging.info("Fitting text box for slider %s with sample lines:  %s" % (self._props['name'], test_string))
         # if self._props['name']=='spectrogram_contrast':
         #    import ipdb; ipdb.set_trace()
@@ -98,7 +98,7 @@ class Slider(object):
     def get_value(self):
         return self._value
 
-    def set_value(self,value):
+    def set_value(self, value):
         if not self._props['range'][0] <= value <= self._props['range'][1]:
             raise Exception("Set value outside range (%s): %s" % (self.name, value))
         logging.info("Control %s setting value to %s." % (self.name, value))
@@ -150,15 +150,20 @@ class Slider(object):
         :return:  image
         """
 
-        # draw text_box
+        # draw bounding box
+        # part = self._box
+        # image[part['top']: part['bottom'], part['left']: part['right'], :] = (0, 0, 255, 255)
+
+        # draw text bounding box
         # part = self._text_bbox
         # image[part['top']: part['bottom'], part['left']: part['right'], :] = (255, 0, 0, 255)
-        # draw text_box
+
+        # draw slider bounding box
         # part = self._slider_bbox
         # image[part['top']: part['bottom'], part['left']: part['right'], :] = (0, 255, 0, 255)
 
         # write text
-        string = self._props['label'] % (self._value,)
+        string = self._props['label'](self._value)
 
         y = self._text_bbox['top'] + self._y_offset
         lines = string.split('\n')
@@ -201,29 +206,51 @@ class ControlPanel(object):
 
     def _make_controls(self, init_values=None):
         """
-        Space everything out evenly for now.
+        Space rows out evenly for now.
         layout defined by list of lists (rows, columns) in Layout.CONTROLS
         """
         ctrl = []
         n_rows = len(Layout.CONTROLS)
-        y_div_lines = np.linspace(self._bbox['top'], self._bbox['bottom'], n_rows + 1).astype(np.int64)
-        h_spacing = Layout.get_value('control_h_spacing')
+        width = self._bbox['right'] - self._bbox['left']
+        height = self._bbox['bottom'] - self._bbox['top']
+        v_space = Layout.get_value('control_v_spacing')
+        h_space = Layout.get_value('control_h_spacing')
+
+        # space evenly for now
+        row_height = int((height - v_space * (n_rows - 1)) / n_rows)
+        y_top = self._bbox['top']
+
         for row_i, control_row in enumerate(Layout.CONTROLS):
             n_cols = len(control_row)
-            width = self._bbox['right'] - self._bbox['left']
-            control_width = int((width - (n_cols - 1) * h_spacing) / n_cols)
+
+            # determine horizontal spacing
+            control_area_width = int((width - (n_cols - 1) * h_space))
+            control_widths_fixed = [control['total_width'] for control in control_row if 'total_width' in control]
+            control_width_remaining = control_area_width - np.sum(control_widths_fixed)
+            n_floating_controls = len(control_row) - len(control_widths_fixed)
+            control_width_floating = int(control_width_remaining / n_floating_controls)
+            x_left = self._bbox['left']
 
             for col_i, control in enumerate(control_row):
-                x_left = col_i * (control_width + h_spacing)
-                box = {'top': y_div_lines[row_i],
-                       'bottom': y_div_lines[row_i + 1],
+                if 'total_width' in control:
+                    col_width = control['total_width']
+                else:
+                    col_width = control_width_floating
+                box = {'top': y_top,
+                       'bottom': y_top + row_height,
                        'left': x_left,
-                       'right': x_left + control_width}
+                       'right': x_left + col_width}
+                x_left += col_width + h_space
+
+                # if col_i==len(control_row)-1:
+                #    box['right']=self._bbox['right']  # make flush
+
                 logging.info("Making control (%i, %i):  %s @%s" % (row_i, col_i, control['name'], box))
                 c = Slider(box, control)
                 if init_values is not None and control['name'] in init_values:
                     c.set_value(init_values[control['name']])
                 ctrl.append(c)
+            y_top += row_height + v_space
 
         return ctrl
 
