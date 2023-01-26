@@ -43,9 +43,18 @@ Sound sources:
  
 ### steps
 
-1. Clone (`git clone git@github.com:andsmith/sound_stretcher`). 
+1. Install:
+   
+```
+git clone git@github.com:andsmith/sound_stretcher
+cd sound_stretcher   
+git submodule  update --init --recursive
+```
 
-2. From the new folder, run:  `python stretcher.py`
+2. Run:
+```
+python stretcher.py
+```
 
 ### screenshot
 ![Example from Luscinia_megarhynchos_-_Common_Nightingale_XC546171.mp3](https://github.com/andsmith/sound_stretcher/blob/main/screen.png)
