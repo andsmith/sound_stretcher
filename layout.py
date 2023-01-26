@@ -24,7 +24,6 @@ class Layout(object):
     CONTROL_HEIGHT = 120  # region of window for control panel
 
     # other things needed in definitions below
-    ZOOM_POWERS_MAX = 10.
     CURSOR_WIDTH = 4  # pixels
     CURSOR_ALPHA = 200
     HELP_TEXT_ALPHA = 255
@@ -67,24 +66,25 @@ class Layout(object):
                             'h_indent': 15,  # scale from edges
                             'text_indent_h_v': (10, 4),  # label from edges
                             'height': 15},  # of scale parts
-            'spectrogram_params': {'time_resolution_sec': 0.001,
-                                   'frequency_resolution_hz': 110.0,
+            'spectrogram_params': {'max_display_duration_sec': 5.0,  # show at most this many seconds of spectrum (costly)
+                                   'time_resolution_sec': 0.001,
+                                   'frequency_resolution_hz': 130.0,
                                    'max_freq': MAX_SPECTROGRAM_FREQ}, }
 
     # list of lists for rows/columns
     CONTROLS = [[{'name': 'stretch_factor',  # ################  ROW 1
                   'label': lambda x: 'Stretch\n%.2f x' % (x,),
-                  'range': (1.0, 20.0),
+                  'range': (1.0, 10.0),
                   'resolution': 0.005,
                   'init': 1.0,
                   'sample_value': 10.0,  # large test value for text fitting
                   'text_width': 145},
                  {'name': 'zoom_t',
-                  'label': lambda x: 'zoom T\n1 / %.3g' % (exp_fact_from_control_value(x, Layout.ZOOM_POWERS_MAX),),
-                  'range': (0.01, 1.),
-                  'resolution': .01,
+                  'label': lambda x: 'zoom T\n1 / %4.1f' %(1./x,),
+                  'range': (0.005, 2.),
+                  'resolution': .005,
                   'init': 1.0,
-                  'sample_value': .77,
+                  'sample_value': 777.123412,
                   'text_width': 100,
                   'total_width': 400}],  # optional, fitting not checked!
 

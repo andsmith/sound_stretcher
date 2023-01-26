@@ -73,6 +73,7 @@ class StretchApp(object):
         self._audio_lock = Lock()  # dropped frame detected if not acquire(timeout=0)
 
         self._spectrogram_raw = None  # dict("z", "f","t") # (z-values, frequency list, timestamp list)
+        self._oversize_factor = None
         self._spectrogram_freq_range = (1.0, Layout.get_value('spectrogram_params')['max_freq'])
 
         self._tkroot = tk.Tk()  # for open/save file dialogs
@@ -203,6 +204,9 @@ class StretchApp(object):
                                                  resolution_sec=params['time_resolution_sec'],
                                                  freq_range=self._spectrogram_freq_range)
             self._spectrogram_raw = {'power': np.abs(z) ** 2., 'f': freqs, 't': times}
+            oversize = self._sound.duration_sec / params['max_display_duration_sec']
+            self._oversize_factor = oversize if oversize > 1. else 1.
+
             logging.info("Created new spectrogram:  %s (F x T)" % (self._spectrogram_raw['power'].shape,))
 
             # create interpolation objects for stretching sound samples.
@@ -223,11 +227,6 @@ class StretchApp(object):
 
         Thread(target=finish_loading).start()  # finish slow things in thread so UI keeps working
 
-    def _get_zoom_t(self):
-        c = self._user_params['zoom_t']
-        f = exp_fact_from_control_value(c, Layout.ZOOM_POWERS_MAX)
-        return f
-
     def _get_spectrogram_t_range(self):
         """
         Zoom in (time) and apply stretch factor.
@@ -235,7 +234,8 @@ class StretchApp(object):
         :return: (t_left, t_right) indexing self._spectrogram_raw['t']
         """
         pos_t = self._playback_position_t if self._state == StretchAppStates.playing else self._mouse_cursor_t
-        t_span = self._sound.duration_sec / self._user_params['stretch_factor'] / self._get_zoom_t()
+        t_span = self._sound.duration_sec / self._user_params['stretch_factor'] * self._user_params['zoom_t'] / self._oversize_factor
+
         t_left, t_right = pos_t - t_span / 2, pos_t + t_span / 2
         if t_left < 0:
             t_left = 0
@@ -243,6 +243,7 @@ class StretchApp(object):
         if t_right > self._sound.duration_sec:
             t_right = self._sound.duration_sec
             t_left = t_right - t_span
+        
         return t_left, t_right
 
     def _get_spectrogram_f_range(self):
@@ -309,6 +310,7 @@ class StretchApp(object):
 
         # get slice
         spec_left_t, spec_right_t = self._get_spectrogram_t_range()
+
         spec_left = np.sum(self._spectrogram_raw['t'] < spec_left_t)
         spec_right = np.sum(self._spectrogram_raw['t'] < spec_right_t)
         spec_low, spec_high = self._get_spectrogram_f_range()
@@ -414,7 +416,7 @@ class StretchApp(object):
             if duration > self._run_stats['update_interval_sec']:
                 frame_rate = self._run_stats['frame_count'] / duration
                 buffer_rate = self._run_stats['buffer_count'] / duration
-                logging.info("Frame rate:  %.2f FPS,  audio buffers/sec:  %.2f (%i dropped)" % (
+                logging.info("display FPS:  %.2f,  audio buffers/sec:  %.2f (%i dropped requests)" % (
                     frame_rate, buffer_rate, self._run_stats['dropped_audio_frames']))
                 self._run_stats['start_time'] = now
                 self._run_stats['idle_t'] = 0.0
@@ -485,7 +487,9 @@ class StretchApp(object):
                 # draw playback time marker on spectrogram
                 if self._state == StretchAppStates.playing:
                     spec_cursor_width = int(
-                        Layout.CURSOR_WIDTH * self._user_params['stretch_factor'] * self._get_zoom_t())
+                        Layout.CURSOR_WIDTH * self._user_params['stretch_factor'] / self._user_params['zoom_t'] * self._oversize_factor)
+                    if spec_cursor_width > self._spectrogram_size[0]:
+                        spec_cursor_width = self._spectrogram_size[0]
                     spec_left_t, spec_right_t = self._get_spectrogram_t_range()
                     rel_pos = (self._playback_position_t - spec_left_t) / (spec_right_t - spec_left_t)
                     playback_line_x = int(rel_pos * self._spectrogram_size[0]) + self._spectrogram_area['left']
