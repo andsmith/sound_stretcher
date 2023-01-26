@@ -12,13 +12,13 @@ from scipy.interpolate import interp1d
 import os
 from threading import Thread, Lock
 from version import VERSION
-from sound import Sound, SoundPlayer
+from sound_tools.sound import Sound, SoundPlayer
 from util import make_unique_filename, in_area, draw_v_line, exp_fact_from_control_value
 from layout import Layout
 from help import HelpDisplay
 from controls import ControlPanel
 
-from spectrograms import get_power_spectrum
+from sound_tools.spectrograms import get_power_spectrum
 
 from text_box import TextBox
 
