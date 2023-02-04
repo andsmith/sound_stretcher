@@ -70,7 +70,7 @@ class Layout(object):
                             'height': 15},  # of scale parts
 
             'spectrogram_params': {'resolution_sec': 0.001,
-                                   'resolution_hz': 130.0,
+                                   'resolution_hz': 80.0,
                                    'max_freq': MAX_SPECTROGRAM_FREQ}, }
 
     # list of lists for rows/columns
