@@ -7,6 +7,7 @@ from sound_tools.sound import Sound
 import time
 from spectrogram import Spectrogram
 
+
 def test_spectrogram():
     size = (1000, 800)
     box = {'top': 100, 'left': 10, 'bottom': 790, 'right': 990}
@@ -26,7 +27,7 @@ def test_spectrogram():
                            'value': 1.0},
                 'pan_f': {'up_key': 'p',
                           'down_key': 'o',
-                          'value': 1.0},
+                          'value': 0.0},
                 }
 
     t = 0.
@@ -42,12 +43,11 @@ def test_spectrogram():
 
         control = {k: controls[k]['value'] for k in controls}
 
-        _ = spec.draw(frame, t=t, contrast=0.1, **control)
+        _ = spec.draw(frame, t=t, contrast=-0.1, **control)
 
         # scroll
         t += 0.01
         if t > sound.duration_sec:
-            break
             t = 0.
 
         # delay
@@ -71,10 +71,14 @@ def test_spectrogram():
             break
         for control in controls:
             if k & 0xff == ord(controls[control]['up_key']):
-                controls[control]['value'] *= 1.2
+                controls[control]['value'] += 0.05
+                if controls[control]['value'] > 1.0:
+                    controls[control]['value'] = 1.0
                 print("Adjusting %s up:  %.3f" % (control, controls[control]['value']))
             elif k & 0xff == ord(controls[control]['down_key']):
-                controls[control]['value'] /= 1.2
+                controls[control]['value'] -= 0.05
+                if controls[control]['value'] < 0:
+                    controls[control]['value'] = 0
                 print("Adjusting %s down:  %.3f" % (control, controls[control]['value']))
 
         # print FPS

@@ -83,10 +83,10 @@ class Layout(object):
                   'text_width': 145},
                  {'name': 'zoom_t',
                   'label': lambda x: 'zoom T\n1 / %4.1f' % (1. / x,),
-                  'range': (0.005, 2.),
+                  'range': (0.005, 10.),
                   'resolution': .005,
                   'init': 1.0,
-                  'sample_value': 777.123412,
+                  'sample_value': 7.123412,
                   'text_width': 100,
                   'total_width': 400}],  # optional, fitting not checked!
 

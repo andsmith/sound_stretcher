@@ -48,7 +48,7 @@ class Spectrogram(object):
         # get F indices for spectrogram image
         pan_amount = (1.0 - zoom_f) * pan_f
         f_range_rel = np.array((pan_amount, pan_amount + zoom_f))
-        freq_range = self._f_limits * f_range_rel
+        freq_range = self._f_limits[1] * f_range_rel
         f_low_i = np.sum(self._f <= freq_range[0])
         f_high_i = np.sum(self._f <= freq_range[1])
 

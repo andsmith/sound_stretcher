@@ -21,7 +21,6 @@ from controls import ControlPanel
 from sound_tools.spectrograms import get_power_spectrum
 from spectrogram import Spectrogram
 from text_box import TextBox
-from loop_timing.loop_profiler import LoopPerfTimer
 
 
 class StretchAppStates(IntEnum):
@@ -175,9 +174,11 @@ class StretchApp(object):
 
         # ask user for filename
         all_patterns = Sound.NATIVE_FORMATS + Sound.OTHER_FORMATS
+        global_pattern = [("All sound formats", [extension for format in all_patterns for extension in format[1]])]
         filename = filedialog.askopenfilename(initialdir=os.getcwd(),
                                               title="Select sound to stretch...",
-                                              filetypes=all_patterns)
+                                              filetypes=global_pattern + all_patterns)
+
         if filename is None or len(filename) == 0:
             logging.info("Not loading new sound.")
             return
@@ -304,9 +305,7 @@ class StretchApp(object):
 
         t_start = time.perf_counter()  # when last frame shown
 
-        LoopPerfTimer.reset(enable=False, burn_in=100, display_after=50, save_results=None)
         while not self._shutdown:
-            LoopPerfTimer.mark_loop_start()
 
             # generate the next frame, wait until time, then show it
             self._last_frame = self._make_frame()
@@ -337,7 +336,7 @@ class StretchApp(object):
                 self._run_stats['frame_count'] = 0
                 self._run_stats['dropped_audio_frames'] = 0
                 self._run_stats['buffer_count'] = 0
-            LoopPerfTimer.add_marker("Loop end")
+
         logging.info("Stretcher app stopping.")
 
     def _keyboard(self, k):
@@ -367,7 +366,6 @@ class StretchApp(object):
         elif k & 0xff == ord('l'):
             self._load_file()
 
-    @LoopPerfTimer.time_function
     def _make_frame(self):
 
         if self._state == StretchAppStates.init:
@@ -400,7 +398,7 @@ class StretchApp(object):
 
             # draw the rest
             if self._spectrogram is not None:
-                zoom =  self._user_params['zoom_t']/self._user_params['stretch_factor']
+                zoom = self._user_params['zoom_t'] / self._user_params['stretch_factor']
                 zoom_f, pan_f = self._user_params['zoom_f'], self._user_params['pan_f']
                 contrast = self._user_params['spectrogram_contrast']
                 self._spectrogram.draw(frame, spectrum_t, zoom, zoom_f, pan_f, contrast)
