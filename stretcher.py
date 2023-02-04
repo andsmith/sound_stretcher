@@ -12,15 +12,16 @@ from scipy.interpolate import interp1d
 import os
 from threading import Thread, Lock
 from version import VERSION
-from sound_tools.sound import Sound, SoundPlayer
+from sound_tools.sound import Sound
+from sound_tools.sound_player import SoundPlayer
 from util import make_unique_filename, in_area, draw_v_line, exp_fact_from_control_value
 from layout import Layout
 from help import HelpDisplay
 from controls import ControlPanel
-
 from sound_tools.spectrograms import get_power_spectrum
-
+from spectrogram import Spectrogram
 from text_box import TextBox
+from loop_timing.loop_profiler import LoopPerfTimer
 
 
 class StretchAppStates(IntEnum):
@@ -52,29 +53,24 @@ class StretchApp(object):
 
         # window/area sizes
         self._window_size = Layout.get_value('window_size')
-
         self._msg_area = Layout.get_value("msg_area")
         self._waveform_area = Layout.get_value('wave_area')
         self._spectrogram_area = Layout.get_value('spectrum_area')
         self._control_area = Layout.get_value('control_area')
-        self._spectrogram_size = self._spectrogram_area['right'] - self._spectrogram_area['left'], \
-                                 self._spectrogram_area['bottom'] - self._spectrogram_area['top']
+        self._spectrogram = None  # create on load
         self._controls = ControlPanel(self._control_update, self._control_area)
         self._help = HelpDisplay(self._window_size[::-1])
-        self._valid_freqs = None  # stored for spectrogram
+
+        self._audio = None  # SoundPlayer(), initialized with sound file parameters after loading.
         self._sound = None  # Sound() object
+
         self._interps = None  # list of interp1d objects to interpolate each channel
         self._bkg = None  # app background image
-        self._audio = None  # SoundPlayer(), initialized with sound file parameters after loading.
         self._last_frame = None  # draw message box on this
 
         # for dropped audio frames
         self._last_encoded_samples = None  # send these if necessary
-        self._audio_lock = Lock()  # dropped frame detected if not acquire(timeout=0)
-
-        self._spectrogram_raw = None  # dict("z", "f","t") # (z-values, frequency list, timestamp list)
-        self._oversize_factor = None
-        self._spectrogram_freq_range = (1.0, Layout.get_value('spectrogram_params')['max_freq'])
+        self._audio_lock = Lock()  # dropped frame detected when (not acquire(timeout=0)) is true
 
         self._tkroot = tk.Tk()  # for open/save file dialogs
         self._tkroot.withdraw()  # use cv2 window as main window
@@ -82,14 +78,16 @@ class StretchApp(object):
         msg_font_info = {'font': Layout.get_value('msg_font'),
                          'bkg_color': Layout.get_color('msg_bkg_color'),
                          'text_color': Layout.get_color('msg_text_color')}
+
         self._messages = {'loading': TextBox(box_dims=self._msg_area,
                                              text_lines=['loading & analyzing ...'], centered=True,
                                              **msg_font_info),
+
                           'saving': TextBox(box_dims=self._msg_area,
                                             text_lines=['saving ...'], centered=True,
                                             **msg_font_info)}
 
-        self._cur_msg = None  # should be one of the keys in self._messages
+        self._cur_msg_key = None
 
         # FPS info
         self._run_stats = {'buffer_count': 0,
@@ -104,19 +102,20 @@ class StretchApp(object):
                                  zoom_f=self._controls.get_value('zoom_f'),
                                  zoom_t=self._controls.get_value('zoom_t'),
                                  pan_f=self._controls.get_value('pan_f'))
-        self._last_stretch_factor = self._user_params['stretch_factor']  # for smoother transitions, interpolate
+        # interpolate for smoother transitions
+        self._last_stretch_factor = self._user_params['stretch_factor']
 
-        logging.info("Stretcher init complete.")
         self._run()
 
     def _control_update(self, name, value):
         """
         User is updating our params (control panel callback).
-        Special actions triggered by user controls should start here.
+
         :param name:  name of param
         :param value: new value
         """
         self._user_params[name] = value
+        # Special actions triggered by user control changes should start here.
 
     def _get_time_from_pos(self, mouse_x):
         """
@@ -174,7 +173,11 @@ class StretchApp(object):
             self._stop_playback()
             self._state = StretchAppStates.idle
 
-        filename = filedialog.askopenfilename(initialdir=os.getcwd())
+        # ask user for filename
+        all_patterns = Sound.NATIVE_FORMATS + Sound.OTHER_FORMATS
+        filename = filedialog.askopenfilename(initialdir=os.getcwd(),
+                                              title="Select sound to stretch...",
+                                              filetypes=all_patterns)
         if filename is None or len(filename) == 0:
             logging.info("Not loading new sound.")
             return
@@ -184,30 +187,21 @@ class StretchApp(object):
             self._audio.shutdown()
             self._audio = None
 
-        self._cur_msg = 'loading'
+        self._cur_msg_key = 'loading'
         self._state = StretchAppStates.busy
 
         def finish_loading():
-
             logging.info("Reading sound file:  %s" % (filename,))
             self._filename = filename
             self._sound = Sound(self._filename)
 
-            # create background image (top waveform)
+            # create background image w/waveform
             self._bkg = self._get_background()
 
-            # do analysis for spectrogram
+            # do analysis for spectrogram animation
             params = Layout.get_value('spectrogram_params')
-            z, freqs, times = get_power_spectrum(self._sound.get_mono_data(),
-                                                 self._sound.metadata.framerate,
-                                                 resolution_hz=params['frequency_resolution_hz'],
-                                                 resolution_sec=params['time_resolution_sec'],
-                                                 freq_range=self._spectrogram_freq_range)
-            self._spectrogram_raw = {'power': np.abs(z) ** 2., 'f': freqs, 't': times}
-            oversize = self._sound.duration_sec / params['max_display_duration_sec']
-            self._oversize_factor = oversize if oversize > 1. else 1.
-
-            logging.info("Created new spectrogram:  %s (F x T)" % (self._spectrogram_raw['power'].shape,))
+            self._spectrogram = Spectrogram(bbox=self._spectrogram_area,
+                                            sound=self._sound, **params)
 
             # create interpolation objects for stretching sound samples.
             time_indices = np.linspace(0,
@@ -227,42 +221,6 @@ class StretchApp(object):
 
         Thread(target=finish_loading).start()  # finish slow things in thread so UI keeps working
 
-    def _get_spectrogram_t_range(self):
-        """
-        Zoom in (time) and apply stretch factor.
-        Keep range centered around position.
-        :return: (t_left, t_right) indexing self._spectrogram_raw['t']
-        """
-        pos_t = self._playback_position_t if self._state == StretchAppStates.playing else self._mouse_cursor_t
-        t_span = self._sound.duration_sec / self._user_params['stretch_factor'] * self._user_params['zoom_t'] / self._oversize_factor
-
-        t_left, t_right = pos_t - t_span / 2, pos_t + t_span / 2
-        if t_left < 0:
-            t_left = 0
-            t_right = t_left + t_span
-        if t_right > self._sound.duration_sec:
-            t_right = self._sound.duration_sec
-            t_left = t_right - t_span
-        
-        return t_left, t_right
-
-    def _get_spectrogram_f_range(self):
-        """
-        Zoom & pan in (frequencies).
-        :return: (f_low,f_high), indexing self._spectrogram_raw['f']
-        """
-        f_max = self._spectrogram_freq_range[1] * self._user_params['zoom_f']
-        max_pan = self._spectrogram_freq_range[1] - f_max
-        f_pan = max_pan * self._user_params['pan_f']
-        f_low = self._spectrogram_freq_range[0] + f_pan
-        f_high = f_max + f_pan
-        frequencies = self._spectrogram_raw['f']
-        f_low_ind = np.sum(frequencies <= f_low)
-        f_high_ind = np.sum(frequencies <= f_high)
-        if f_high_ind == f_low_ind:
-            f_high_ind += 1
-        return f_low_ind, f_high_ind
-
     def _get_background(self):
         """
         Get as much of the window that is static as possible
@@ -271,55 +229,8 @@ class StretchApp(object):
         image = np.zeros((self._window_size[1], self._window_size[0], 4), dtype=np.uint8) + np.array(
             Layout.get_color('bkg'), dtype=np.uint8)
         self._sound.draw_waveform(image, bbox=self._waveform_area, color=Layout.get_color('wave_sound'))
-
-        logging.info("\t... complete.")
+        logging.info("\t... generated.")
         return image
-
-    def _get_spectrogram_image(self):
-        """
-        visualize the STFT result for given UI params of spectrogram
-            1. get appropriate time & frequency subset for given zoom & stretch
-            2. adjust contrast
-            3. apply colormap
-        """
-
-        def _scale_power(p, contrast):
-            """
-            Scale spectrogram intensities, by 1 of two methods:
-
-                if contrast < 0, return norm(np.log((1-contrast) + p)),  where norm() divides array by max
-                else return norm(p)^(-1-contrast)   (alpha correction)
-
-            :param p: |z|^2 values
-            :param contrast: float
-            :return: scaled values (floats)
-            """
-            if contrast < 0:
-                # "padded log scaling", then normalize
-                contrast = (1. - contrast)
-                image_f = np.log(contrast + p)
-                return image_f / np.max(image_f)
-
-            else:  # raw / alpha scaling of normalized values
-                # reverse range, so looks better next to log
-                contrast_range = self._controls.get_control('spectrogram_contrast').get_prop('range')
-                contrast = contrast_range[1] - contrast
-                image_f = p / np.max(p)  # normalize
-                alpha = 1.0 / (contrast + 1.0)
-                return image_f ** alpha
-
-        # get slice
-        spec_left_t, spec_right_t = self._get_spectrogram_t_range()
-
-        spec_left = np.sum(self._spectrogram_raw['t'] < spec_left_t)
-        spec_right = np.sum(self._spectrogram_raw['t'] < spec_right_t)
-        spec_low, spec_high = self._get_spectrogram_f_range()
-
-        spectrogram = _scale_power(self._spectrogram_raw['power'][spec_low:spec_high, spec_left: spec_right],
-                                   self._user_params['spectrogram_contrast'])
-        spectrogram_img_mono = (spectrogram * 255.0).astype(np.uint8)
-        spectrogram_img = cv2.applyColorMap(spectrogram_img_mono, cv2.COLORMAP_HOT)
-        return cv2.resize(spectrogram_img, self._spectrogram_size, cv2.INTER_NEAREST)[::-1, :, :]
 
     def _start_playback(self, begin_t=0.):
         """
@@ -386,13 +297,16 @@ class StretchApp(object):
         """
         Main loop.
         """
+        logging.info("Stretcher app starting.")
         cv2.namedWindow(self._win_name, cv2.WINDOW_AUTOSIZE)
         cv2.resizeWindow(self._win_name, self._window_size)
         cv2.setMouseCallback(self._win_name, self._mouse)
 
         t_start = time.perf_counter()  # when last frame shown
 
+        LoopPerfTimer.reset(enable=False, burn_in=100, display_after=50, save_results=None)
         while not self._shutdown:
+            LoopPerfTimer.mark_loop_start()
 
             # generate the next frame, wait until time, then show it
             self._last_frame = self._make_frame()
@@ -408,7 +322,7 @@ class StretchApp(object):
             k = cv2.waitKey(1)
             self._keyboard(k)
 
-            # stats
+            # timing stats
             self._run_stats['frame_count'] += 1
             now = time.perf_counter()
 
@@ -423,6 +337,8 @@ class StretchApp(object):
                 self._run_stats['frame_count'] = 0
                 self._run_stats['dropped_audio_frames'] = 0
                 self._run_stats['buffer_count'] = 0
+            LoopPerfTimer.add_marker("Loop end")
+        logging.info("Stretcher app stopping.")
 
     def _keyboard(self, k):
         if k & 0xff == ord('q'):
@@ -436,6 +352,7 @@ class StretchApp(object):
             logging.info("\n\n\n==========================\nDebug console:")
             import ipdb
             ipdb.set_trace()
+
         elif k & 0xff == ord(' '):
             if self._state == StretchAppStates.idle:
                 # pause, restart at same position (if mouse not on spectrogram)
@@ -450,63 +367,48 @@ class StretchApp(object):
         elif k & 0xff == ord('l'):
             self._load_file()
 
+    @LoopPerfTimer.time_function
     def _make_frame(self):
 
         if self._state == StretchAppStates.init:
             # Before anything is loaded, just show help
             frame = np.zeros((self._window_size[1], self._window_size[0], 4), dtype=np.uint8)
             self._help.add_help(frame)
+
         elif self._state == StretchAppStates.busy:
             # a thread is finishing a task so just show previous frame with message about task
             frame = self._last_frame.copy()
-            text = self._messages[self._cur_msg]
+            text = self._messages[self._cur_msg_key]
             text.write_text(frame)
 
-        else:  # if self._state in [StretchAppStates.playing, StretchAppStates.idle]:
-            # copy the static part of the background to draw on
+        else:
             mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
             playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
-            spectrogram_cursor_color = np.array(Layout.get_color('spectrogram_cursor'), dtype=np.uint8)
             frame = self._bkg.copy()
 
-            # draw mouse cursor
-            if self._mouse_cursor_t is not None:
-                mouse_line_x = self._get_pos_from_time(self._mouse_cursor_t)
+            # draw in wave area
+            mouse_line_x = self._get_pos_from_time(self._mouse_cursor_t)
+            draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, mouse_cursor_color,
+                        y_range=self._waveform_area)
+            spectrum_t = self._mouse_cursor_t
 
-                draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, mouse_cursor_color,
-                            y_range=self._waveform_area)
-
-            # Draw spectrogram
-            if self._spectrogram_raw is not None:
-                spectrogram_img = self._get_spectrogram_image()
-                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
-                self._spectrogram_area['left']:self._spectrogram_area['right'], :3] = spectrogram_img
-                frame[self._spectrogram_area['top']:self._spectrogram_area['bottom'],
-                self._spectrogram_area['left']:self._spectrogram_area['right'], 3] = 255
-
-                # draw playback time marker on spectrogram
-                if self._state == StretchAppStates.playing:
-                    spec_cursor_width = int(
-                        Layout.CURSOR_WIDTH * self._user_params['stretch_factor'] / self._user_params['zoom_t'] * self._oversize_factor)
-                    if spec_cursor_width > self._spectrogram_size[0]:
-                        spec_cursor_width = self._spectrogram_size[0]
-                    spec_left_t, spec_right_t = self._get_spectrogram_t_range()
-                    rel_pos = (self._playback_position_t - spec_left_t) / (spec_right_t - spec_left_t)
-                    playback_line_x = int(rel_pos * self._spectrogram_size[0]) + self._spectrogram_area['left']
-                    draw_v_line(frame, playback_line_x, spec_cursor_width, spectrogram_cursor_color,
-                                y_range=self._spectrogram_area)
-
-            # draw controls
-            self._controls.draw(frame)
-
-            # draw playback time marker on wave
             if self._state == StretchAppStates.playing:
                 playback_line_x = self._get_pos_from_time(self._playback_position_t)
                 draw_v_line(frame, playback_line_x, Layout.CURSOR_WIDTH, playback_cursor_color,
                             y_range=self._waveform_area)
+                spectrum_t = self._playback_position_t
 
-        if self._showing_help:
-            self._help.add_help(frame)
+            # draw the rest
+            if self._spectrogram is not None:
+                zoom =  self._user_params['zoom_t']/self._user_params['stretch_factor']
+                zoom_f, pan_f = self._user_params['zoom_f'], self._user_params['pan_f']
+                contrast = self._user_params['spectrogram_contrast']
+                self._spectrogram.draw(frame, spectrum_t, zoom, zoom_f, pan_f, contrast)
+
+            self._controls.draw(frame)
+
+            if self._showing_help:
+                self._help.add_help(frame)
 
         return frame
 
@@ -521,7 +423,7 @@ class StretchApp(object):
         out_filename = make_unique_filename("%s_x%.4f.wav" % (file_name, self._user_params['stretch_factor']))
         out_filename = filedialog.asksaveasfilename(initialfile=out_filename)
 
-        self._cur_msg = 'saving'
+        self._cur_msg_key = 'saving'
         old_state, self._state = self._state, StretchAppStates.busy
 
         def finish_saving():

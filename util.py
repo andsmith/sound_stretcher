@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 
-def exp_fact_from_control_value(x, n_powers_max, precision = 1):
+def exp_fact_from_control_value(x, n_powers_max, precision=1):
     """
     For zooming in at exponential scales.
 
@@ -63,3 +63,16 @@ def draw_v_line(image, x, width, color, y_range=None):
         image[y_low: y_high, x_coords[0]:x_coords[1], :] = np.uint8(new_line)
     else:
         image[y_low: y_high, x_coords[0]:x_coords[1], :] = color
+
+
+def clip_bounds(low, high, size, maximum):
+    """
+    Make sure 0 <= low < high <= maximum, and high - low = size
+    """
+    if low < 0:
+        low = 0
+        high = min(size, maximum)
+    if high > maximum:
+        high = maximum
+        low = max(maximum - size, 0)
+    return low, high

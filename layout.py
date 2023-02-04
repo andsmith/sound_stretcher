@@ -18,17 +18,19 @@ COLORS = {'slate': _rgba_to_bgra(0x30, 0x36, 0x3d, 255),
 
 
 class Layout(object):
+    # to not bog down display, make spectrogram width the window width:
+    MAX_SPECTROGRAM_TIME_SLICES = 1400
+
     # window dimensions
-    WINDOW_SIZE = 1400, 800
+    WINDOW_SIZE = MAX_SPECTROGRAM_TIME_SLICES, 800  # W x H
     WAVE_HEIGHT = 150  # region of window for waveform image
     CONTROL_HEIGHT = 120  # region of window for control panel
 
-    # other things needed in definitions below
     CURSOR_WIDTH = 4  # pixels
     CURSOR_ALPHA = 200
     HELP_TEXT_ALPHA = 255
     HELP_BKG_ALPHA = 235
-    SPECTROGRAM_CURSOR_ALPHA = 32  # not too distracting for large zoom?
+    SPECTROGRAM_CURSOR_ALPHA =128  # not too distracting for large zoom?
     MAX_SPECTROGRAM_FREQ = 20000.  # shrink if large sound files get too big in memory
 
     _COLOR_SCHEME = {'bkg': COLORS['slate'],
@@ -46,7 +48,7 @@ class Layout(object):
 
     # misc key-value look-up
     _LUT = {'window_size': WINDOW_SIZE,
-            'msg_area': {'top': int(WINDOW_SIZE[1] /3), 'bottom': int(WINDOW_SIZE[1] / 3 * 2),
+            'msg_area': {'top': int(WINDOW_SIZE[1] / 3), 'bottom': int(WINDOW_SIZE[1] / 3 * 2),
                          'left': int(WINDOW_SIZE[0] / 3), 'right': int(WINDOW_SIZE[0] / 3 * 2)},  # centered box
 
             'wave_area': {'top': 0, 'bottom': WAVE_HEIGHT, 'left': 0, 'right': WINDOW_SIZE[0]},  # top band of window
@@ -66,9 +68,9 @@ class Layout(object):
                             'h_indent': 15,  # scale from edges
                             'text_indent_h_v': (10, 4),  # label from edges
                             'height': 15},  # of scale parts
-            'spectrogram_params': {'max_display_duration_sec': 5.0,  # show at most this many seconds of spectrum (costly)
-                                   'time_resolution_sec': 0.001,
-                                   'frequency_resolution_hz': 130.0,
+
+            'spectrogram_params': {'resolution_sec': 0.001,
+                                   'resolution_hz': 130.0,
                                    'max_freq': MAX_SPECTROGRAM_FREQ}, }
 
     # list of lists for rows/columns
@@ -80,7 +82,7 @@ class Layout(object):
                   'sample_value': 10.0,  # large test value for text fitting
                   'text_width': 145},
                  {'name': 'zoom_t',
-                  'label': lambda x: 'zoom T\n1 / %4.1f' %(1./x,),
+                  'label': lambda x: 'zoom T\n1 / %4.1f' % (1. / x,),
                   'range': (0.005, 2.),
                   'resolution': .005,
                   'init': 1.0,
@@ -90,7 +92,7 @@ class Layout(object):
 
                 [{'name': 'spectrogram_contrast',  # ################  ROW 2
                   'label': lambda x: 'contrast\n%.2f' % (x,),
-                  'range': (-1.0, 4.0),  # negative for log-scaling, positive for alpha correction
+                  'range': (-1.0, 10.0),  # negative for log-scaling, positive for alpha correction
                   'resolution': 0.05,
                   'init': 0,
                   'sample_value': -10.0,
