@@ -37,13 +37,14 @@ def test_spectrogram():
     target_fps = 60.
     fps_delay = 1. / target_fps
     start_time = time.perf_counter()
+    cursor = True
     while True:
 
         frame = blank.copy()
 
         control = {k: controls[k]['value'] for k in controls}
 
-        _ = spec.draw(frame, t=t, contrast=-0.1, **control)
+        _ = spec.draw(frame, t=t, contrast=-0.1, cursor=cursor, **control)
 
         # scroll
         t += 0.01
@@ -69,6 +70,8 @@ def test_spectrogram():
         k = cv2.waitKey(1)
         if k & 0xff == ord('q'):
             break
+        if k & 0xff == ord('c'):
+            cursor = not cursor
         for control in controls:
             if k & 0xff == ord(controls[control]['up_key']):
                 controls[control]['value'] += 0.05

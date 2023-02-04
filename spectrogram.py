@@ -2,16 +2,20 @@ import cv2
 import numpy as np
 import logging
 from sound_tools.spectrograms import get_power_spectrum
-from util import clip_bounds
-
+from util import clip_bounds,draw_v_line
+from layout import Layout
 
 class Spectrogram(object):
     """Scrolling spectrogram animation"""
 
-    def __init__(self, bbox, sound, resolution_hz, resolution_sec, max_freq=None):
+    def __init__(self, bbox, sound, resolution_hz, resolution_sec,  max_freq=None):
+        self._cursor_color=np.array(Layout.get_color('playback_cursor'))
+
+        self._cursor_width = Layout.CURSOR_WIDTH
         self._max_freq = sound.metadata.framerate / 2 if max_freq is None else max_freq
         self._res_hz = resolution_hz
         self._res_sec = resolution_sec
+
         self._bbox = bbox
         self._width, self._height = self._bbox['right'] - self._bbox['left'], \
                                     self._bbox['bottom'] - self._bbox['top']
@@ -32,7 +36,7 @@ class Spectrogram(object):
         logging.info("Created new spectrogram:  %s (F x T) in window(%s), frequencies pruned %i -> %i." % (
             self._power.shape, (self._width, self._height), f_valid.size, f_valid.sum()))
 
-    def draw(self, frame, t, zoom_t, zoom_f, pan_f, contrast):
+    def draw(self, frame, t, zoom_t, zoom_f, pan_f, contrast, cursor=False):
         """
         Add spectrogram to frame.
 
@@ -42,6 +46,7 @@ class Spectrogram(object):
         :param zoom_f:  float in (0, 1], how much of the spectrum to see (vertically)
         :param pan_f:   float in (0, 1], which portion of the spectrum to see
         :param contrast:  float in [-1,10] see _scale_power()
+        :param cursor:  Draw vertical line at time t
 
         """
 
@@ -59,6 +64,7 @@ class Spectrogram(object):
         t_low_i, t_high_i = clip_bounds(t_ind - int(n_time_samples / 2),
                                         t_ind + int(n_time_samples / 2), n_time_samples, self._t_bin_centers.size - 1)
 
+
         # get and scale image
         power = self._power[f_low_i:f_high_i, t_low_i:t_high_i]
         power_scaled = _scale_power(power, contrast)
@@ -67,7 +73,11 @@ class Spectrogram(object):
         spectrogram_img_resized = cv2.resize(spectrogram_img,
                                              (self._width, self._height),
                                              cv2.INTER_NEAREST)[::-1, :, :]
-
+        # draw cursor
+        if cursor:
+            t_relative = (t_ind - t_low_i) / (t_high_i - t_low_i)
+            cursor_x = int(t_relative * self._width + self._bbox['left'] - self._cursor_width/2)
+            draw_v_line(spectrogram_img_resized, cursor_x, self._cursor_width, self._cursor_color[:3])
         # put in frame
         frame[self._bbox['top']:self._bbox['bottom'],
         self._bbox['left']:self._bbox['right'], :3] = spectrogram_img_resized

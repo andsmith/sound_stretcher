@@ -30,7 +30,6 @@ class Layout(object):
     CURSOR_ALPHA = 200
     HELP_TEXT_ALPHA = 255
     HELP_BKG_ALPHA = 235
-    SPECTROGRAM_CURSOR_ALPHA =128  # not too distracting for large zoom?
     MAX_SPECTROGRAM_FREQ = 20000.  # shrink if large sound files get too big in memory
 
     _COLOR_SCHEME = {'bkg': COLORS['slate'],
@@ -43,7 +42,6 @@ class Layout(object):
                      'msg_text_color': COLORS['slate'][:3] + (HELP_TEXT_ALPHA,),
                      'msg_bkg_color': COLORS['off white'][:3] + (HELP_BKG_ALPHA,),
                      'playback_cursor': COLORS['cursor_green'][:3] + (CURSOR_ALPHA,),
-                     'spectrogram_cursor': COLORS['neutral'][:3] + (SPECTROGRAM_CURSOR_ALPHA,),
                      'mouse_cursor': COLORS['light_gray'][:3] + (CURSOR_ALPHA,)}
 
     # misc key-value look-up

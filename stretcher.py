@@ -202,7 +202,8 @@ class StretchApp(object):
             # do analysis for spectrogram animation
             params = Layout.get_value('spectrogram_params')
             self._spectrogram = Spectrogram(bbox=self._spectrogram_area,
-                                            sound=self._sound, **params)
+                                            sound=self._sound,
+                                            **params)
 
             # create interpolation objects for stretching sound samples.
             time_indices = np.linspace(0,
@@ -401,7 +402,8 @@ class StretchApp(object):
                 zoom = self._user_params['zoom_t'] / self._user_params['stretch_factor']
                 zoom_f, pan_f = self._user_params['zoom_f'], self._user_params['pan_f']
                 contrast = self._user_params['spectrogram_contrast']
-                self._spectrogram.draw(frame, spectrum_t, zoom, zoom_f, pan_f, contrast)
+                self._spectrogram.draw(frame, spectrum_t, zoom, zoom_f, pan_f, contrast,
+                                       cursor=self._state==StretchAppStates.playing)
 
             self._controls.draw(frame)
 
