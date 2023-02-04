@@ -122,11 +122,19 @@ class Slider(object):
             return self._move_to(x, y)
 
     def _move_to(self, x, y):
+        new_value = self._value
+        
         if self._scale_left <= x <= self._scale_right:
             new_value = self._get_value_from_pos(x)
-            if new_value != self._value:
-                self._value = new_value
-                return self._value
+        elif x < self._scale_left:
+            new_value = self._props['range'][0]
+
+        elif self._scale_right <x:
+            new_value = self._props['range'][1]            
+            
+        if new_value != self._value:
+            self._value = new_value
+            return self._value
 
         return None
 

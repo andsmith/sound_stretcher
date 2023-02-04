@@ -63,6 +63,9 @@ class Spectrogram(object):
         t_ind = np.sum(self._t_bin_bounds <= t)
         t_low_i, t_high_i = clip_bounds(t_ind - int(n_time_samples / 2),
                                         t_ind + int(n_time_samples / 2), n_time_samples, self._t_bin_centers.size - 1)
+        if t_high_i==t_low_i:
+            t_high_i+=1
+
 
 
         # get and scale image
