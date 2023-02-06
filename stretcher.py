@@ -204,18 +204,6 @@ class StretchApp(object):
             self._spectrogram = Spectrogram(bbox=self._spectrogram_area,
                                             sound=self._sound,
                                             **params)
-            """                 param_ranges=((0., 1.), (0., 1.)),
-                 init_values=(None, None),
-                 colors=None,
-                 draw_props=None,
-                 expansion_speed=1.1,
-                 title=None,
-                 axis_labels=('x', 'y'),
-                 minor_ticks=True,
-                 minor_unlabeled_ticks=True,
-                 adjustability=(True, True)):
-"""
-
             # create interpolation objects for stretching sound samples.
             time_indices = np.linspace(0,
                                        (self._sound.metadata.nframes - 1) / self._sound.metadata.framerate,
