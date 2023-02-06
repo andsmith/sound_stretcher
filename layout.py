@@ -30,7 +30,7 @@ class Layout(object):
     CURSOR_ALPHA = 200
     HELP_TEXT_ALPHA = 255
     HELP_BKG_ALPHA = 235
-    MAX_SPECTROGRAM_FREQ = 20000.  # shrink if large sound files get too big in memory
+
 
     _COLOR_SCHEME = {'bkg': COLORS['slate'],
                      'control_axis': COLORS['light_gray'],
@@ -68,20 +68,20 @@ class Layout(object):
                             'height': 15},  # of scale parts
 
             'spectrogram_params': {'resolution_sec': 0.001,
-                                   'resolution_hz': 80.0,
-                                   'max_freq': MAX_SPECTROGRAM_FREQ}, }
+                                   'resolution_hz': 100.0,
+                                   'freq_range': [0,20000]}, }
 
     # list of lists for rows/columns
     CONTROLS = [[{'name': 'stretch_factor',  # ################  ROW 1
                   'label': lambda x: 'Stretch\n%.2f x' % (x,),
-                  'range': (1.0, 10.0),
+                  'range': (1.0, 15.0),
                   'resolution': 0.005,
                   'init': 1.0,
                   'sample_value': 10.0,  # large test value for text fitting
                   'text_width': 145},
                  {'name': 'zoom_t',
                   'label': lambda x: 'zoom T\n1 / %4.1f' % (1. / x,),
-                  'range': (0.005, 10.),
+                  'range': (0.005, 15.),
                   'resolution': .005,
                   'init': 1.0,
                   'sample_value': 7.123412,

@@ -13,6 +13,7 @@ class HelpDisplay(object):
             '   * Hotkeys:',
             '',
             '       (space) - Pause / Play',
+            '       a - Disable/Enable axes'
             '       h - show this help',
             '       l - load new sound file',
             '       s - save sound w/current stretch',
