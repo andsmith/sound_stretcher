@@ -12,14 +12,15 @@ def test_spectrogram():
     size = (1000, 800)
     box = {'top': 100, 'left': 10, 'bottom': 790, 'right': 990}
     blank = np.zeros((size[1], size[0], 4), dtype=np.uint8) + 255
-    win_name = "test spectrogram"
-    cv2.namedWindow(win_name, cv2.WINDOW_AUTOSIZE)
-    sound = Sound("Aphelocoma_californica_-_California_Scrub_Jay_-_XC110976.wav")
+    sound = Sound("A-440.wav")#"Aphelocoma_californica_-_California_Scrub_Jay_-_XC110976.wav")
     params = Layout.get_value('spectrogram_params')
-    spec = Spectrogram(box, sound, params['resolution_hz'], params['resolution_sec'])
+    spec = Spectrogram(box, sound, params['resolution_hz'], params['resolution_sec'], (0,params['max_freq']))
     n_frames = 0
     t_start = time.perf_counter()
-    controls = {'zoom_t': {'up_key': 't',
+    controls = {'axes':{'up_key': 'a',
+                        'down_key': 'a',
+                        'value': True},
+                'zoom_t': {'up_key': 't',
                            'down_key': 'g',
                            'value': 1.0},
                 'zoom_f': {'up_key': 'f',
@@ -38,6 +39,10 @@ def test_spectrogram():
     fps_delay = 1. / target_fps
     start_time = time.perf_counter()
     cursor = True
+
+    win_name = "test spectrogram"
+    cv2.namedWindow(win_name, cv2.WINDOW_AUTOSIZE)
+
     while True:
 
         frame = blank.copy()
@@ -72,17 +77,23 @@ def test_spectrogram():
             break
         if k & 0xff == ord('c'):
             cursor = not cursor
+
         for control in controls:
-            if k & 0xff == ord(controls[control]['up_key']):
-                controls[control]['value'] += 0.05
-                if controls[control]['value'] > 1.0:
-                    controls[control]['value'] = 1.0
-                print("Adjusting %s up:  %.3f" % (control, controls[control]['value']))
-            elif k & 0xff == ord(controls[control]['down_key']):
-                controls[control]['value'] -= 0.05
-                if controls[control]['value'] < 0:
-                    controls[control]['value'] = 0
-                print("Adjusting %s down:  %.3f" % (control, controls[control]['value']))
+            if isinstance(controls[control]['value'],bool):
+                if k & 0xff in [ord(controls[control]['up_key']),ord(controls[control]['down_key'])]:
+                    controls[control]['value'] = not controls[control]['value']
+            else:
+                if k & 0xff == ord(controls[control]['up_key']):
+                    controls[control]['value'] += 0.05
+                    if controls[control]['value'] > 1.0:
+                        controls[control]['value'] = 1.0
+                    print("Adjusting %s up:  %.3f" % (control, controls[control]['value']))
+
+                elif k & 0xff == ord(controls[control]['down_key']):
+                    controls[control]['value'] -= 0.05
+                    if controls[control]['value'] < 0:
+                        controls[control]['value'] = 0
+                    print("Adjusting %s down:  %.3f" % (control, controls[control]['value']))
 
         # print FPS
         n_frames += 1

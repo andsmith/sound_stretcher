@@ -18,7 +18,6 @@ from util import make_unique_filename, in_area, draw_v_line, exp_fact_from_contr
 from layout import Layout
 from help import HelpDisplay
 from controls import ControlPanel
-from sound_tools.spectrograms import get_power_spectrum
 from spectrogram import Spectrogram
 from text_box import TextBox
 
@@ -41,7 +40,7 @@ class StretchApp(object):
         self._filename = None
         self._win_name = "Sound Stretcher %s" % (VERSION,)
         self._shutdown = False  # flag for main loop
-
+        self._show_axes = False
         self._showing_help = False
 
         self._playback_position_t = None  # where in sound data will the next sample buffer come from (during playback)
@@ -57,6 +56,7 @@ class StretchApp(object):
         self._spectrogram_area = Layout.get_value('spectrum_area')
         self._control_area = Layout.get_value('control_area')
         self._spectrogram = None  # create on load
+
         self._controls = ControlPanel(self._control_update, self._control_area)
         self._help = HelpDisplay(self._window_size[::-1])
 
@@ -204,6 +204,17 @@ class StretchApp(object):
             self._spectrogram = Spectrogram(bbox=self._spectrogram_area,
                                             sound=self._sound,
                                             **params)
+            """                 param_ranges=((0., 1.), (0., 1.)),
+                 init_values=(None, None),
+                 colors=None,
+                 draw_props=None,
+                 expansion_speed=1.1,
+                 title=None,
+                 axis_labels=('x', 'y'),
+                 minor_ticks=True,
+                 minor_unlabeled_ticks=True,
+                 adjustability=(True, True)):
+"""
 
             # create interpolation objects for stretching sound samples.
             time_indices = np.linspace(0,
@@ -343,6 +354,8 @@ class StretchApp(object):
     def _keyboard(self, k):
         if k & 0xff == ord('q'):
             self._shutdown = True
+        elif k & 0xff == ord('a'):
+            self._show_axes = not self._show_axes
         elif k & 0xff == ord('h'):
             self._showing_help = not self._showing_help
             logging.info("Toggle help:  %s" % (self._showing_help,))
@@ -403,7 +416,8 @@ class StretchApp(object):
                 zoom_f, pan_f = self._user_params['zoom_f'], self._user_params['pan_f']
                 contrast = self._user_params['spectrogram_contrast']
                 self._spectrogram.draw(frame, spectrum_t, zoom, zoom_f, pan_f, contrast,
-                                       cursor=self._state==StretchAppStates.playing)
+                                       cursor=self._state == StretchAppStates.playing,
+                                       axes=self._show_axes)
 
             self._controls.draw(frame)
 
