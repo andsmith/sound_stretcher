@@ -31,7 +31,6 @@ class Layout(object):
     HELP_TEXT_ALPHA = 255
     HELP_BKG_ALPHA = 235
 
-
     _COLOR_SCHEME = {'bkg': COLORS['slate'],
                      'control_axis': COLORS['light_gray'],
                      'control_slider': COLORS['off white'],
@@ -69,7 +68,7 @@ class Layout(object):
 
             'spectrogram_params': {'resolution_sec': 0.001,
                                    'resolution_hz': 100.0,
-                                   'freq_range': [0,20000]}, }
+                                   'freq_range': [0, 20000]}, }
 
     # list of lists for rows/columns
     CONTROLS = [[{'name': 'stretch_factor',  # ################  ROW 1
@@ -81,19 +80,19 @@ class Layout(object):
                   'text_width': 145},
                  {'name': 'zoom_t',
                   'label': lambda x: 'zoom T\n1 / %4.1f' % (1. / x,),
-                  'range': (0.005, 15.),
+                  'range': (0.005, 5.),
                   'resolution': .005,
                   'init': 1.0,
-                  'sample_value': 7.123412,
+                  'sample_value': 1 / 7.,
                   'text_width': 100,
                   'total_width': 400}],  # optional, fitting not checked!
 
                 [{'name': 'spectrogram_contrast',  # ################  ROW 2
                   'label': lambda x: 'contrast\n%.2f' % (x,),
-                  'range': (-1.0, 10.0),  # negative for log-scaling, positive for alpha correction
+                  'range': (-.05, 6.0),  # negative for log-scaling, positive for alpha correction
                   'resolution': 0.05,
-                  'init': 0,
-                  'sample_value': -10.0,
+                  'init': 3.,
+                  'sample_value': 6.0,
                   'text_width': 110},
 
                  {'name': 'pan_f',
