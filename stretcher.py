@@ -1,5 +1,5 @@
 """
-Main app.
+Main app
 """
 import cv2
 from enum import IntEnum
