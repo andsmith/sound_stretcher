@@ -44,7 +44,7 @@ class Spectrogram(object):
             "Created new spectrogram:  %s (F x T) in window (%s)." % (self._power.shape, (self._width, self._height)))
 
         self._grid = CartesianGrid(self._bbox,
-                                   adjustability=(False, True),
+                                   adjustibility=(False, True),
                                    axis_labels=(None, 'f (Hz)'),
                                    colors={'bkg': None},
                                    draw_props={'user_marker': False, 'draw_bounding_box': False,
