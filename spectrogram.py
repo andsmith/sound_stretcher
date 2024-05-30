@@ -65,11 +65,16 @@ class Spectrogram(object):
         """
 
         # get F indices for spectrogram image
-        pan_amount = (1.0 - zoom_f) * pan_f
-        f_range_rel = np.array((pan_amount, pan_amount + zoom_f))
-        freq_range = self._freq_range[1] * f_range_rel
-        f_low_i = np.sum(self._f <= freq_range[0])
-        f_high_i = np.sum(self._f <= freq_range[1]) - 1
+        pan_amount = (1.0 - zoom_f) * pan_f  # offset wrt un-displayed portion of the interval [0, 1]
+        f_range_rel = np.array((pan_amount, pan_amount + zoom_f))  # interval, both endpoints in [0, 1]
+        freq_range = self._freq_range[1] * f_range_rel # interval, both endpoints in Hz
+        f_low_i = np.sum(self._f <= freq_range[0])  # index into f (y-axis of spectrogram)
+        f_high_i = np.sum(self._f < freq_range[1])   # same
+        if f_high_i==f_low_i:  # corner case, make sure at least one row of pixels to display
+            if f_low_i == len(self._f)-1:
+                f_low_i, f_high_i = len(self._f)-2, len(self._f)-1
+            else:
+                f_high_i = f_low_i+1
 
         # get T indices for spectrogram image
         n_time_samples = int(np.ceil(self._width * zoom_t))  # pin default zoom to window size with this
