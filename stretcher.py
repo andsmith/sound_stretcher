@@ -57,6 +57,11 @@ class StretchApp(object):
         self._control_area = Layout.get_value('control_area')
         self._spectrogram = None  # create on load
 
+        # spectrogram editing state vars
+        self._spectrum_click_pt = None  # (x, y) in spectrogram area, starting to draw a box, or None if mouse up
+        self._spectrum_bbox = None  # (x1, y1, x2, y2) in spectrogram area, or None if no box
+        self._undo_stack = []  # list functions to call (no args) to undo changes.
+
         self._controls = ControlPanel(self._control_update, self._control_area)
         self._help = HelpDisplay(self._window_size[::-1])
 
@@ -147,20 +152,41 @@ class StretchApp(object):
 
         elif self._state in [StretchAppStates.idle, StretchAppStates.playing]:
 
-            if not in_area((x, y), self._waveform_area):
-                return
+            if in_area((x, y), self._waveform_area):
+                print("C")
 
-            # update mouse cursor position
-            if event == cv2.EVENT_MOUSEMOVE:
-                if self._sound is not None:
-                    self._mouse_cursor_t = self._get_time_from_pos(x)
+                # update mouse cursor position
+                if event == cv2.EVENT_MOUSEMOVE:
+                    if self._sound is not None:
+                        self._mouse_cursor_t = self._get_time_from_pos(x)
 
-            # check for clicks
-            if event == cv2.EVENT_LBUTTONUP:
-                if self._state == StretchAppStates.playing:
-                    self._stop_playback()
-                self._state = StretchAppStates.playing
-                self._start_playback(self._mouse_cursor_t)
+                # check for clicks
+                if event == cv2.EVENT_LBUTTONUP:
+                    if self._state == StretchAppStates.playing:
+                        self._stop_playback()
+                    self._state = StretchAppStates.playing
+                    self._start_playback(self._mouse_cursor_t)
+
+        if self._state == StretchAppStates.idle:
+
+            # spectrum editing mode
+            if in_area((x, y), self._spectrogram_area):
+                if event == cv2.EVENT_LBUTTONDOWN:
+                    self._spectrum_bbox = None
+                    self._spectrum_click_pt = (x, y)
+                elif event == cv2.EVENT_MOUSEMOVE and self._spectrum_click_pt is not None:
+
+                        self._spectrum_bbox = (min(self._spectrum_click_pt[0], x),
+                                               min(self._spectrum_click_pt[1], y),
+                                               max(self._spectrum_click_pt[0], x),
+                                               max(self._spectrum_click_pt[1], y))
+                elif event == cv2.EVENT_LBUTTONUP:
+                    if self._spectrum_click_pt is not None:
+                        # do something with the box
+                        self._spectrum_click_pt = None
+            else:
+                self._spectrum_click_pt = None
+            
 
     def _stop_playback(self):
         logging.info("Stopping playback.")
@@ -196,19 +222,12 @@ class StretchApp(object):
             self._filename = filename
             self._sound = Sound(self._filename)
 
-            # create background image w/waveform
-            self._bkg = self._get_background()
-
             # do analysis for spectrogram animation
             params = Layout.get_value('spectrogram_params')
             self._spectrogram = Spectrogram(bbox=self._spectrogram_area,
                                             sound=self._sound,
                                             **params)
-            # create interpolation objects for stretching sound samples.
-            time_indices = np.linspace(0,
-                                       (self._sound.metadata.nframes - 1) / self._sound.metadata.framerate,
-                                       self._sound.metadata.nframes)
-            self._interps = [interp1d(time_indices, chan_samples) for chan_samples in self._sound.data]
+            self._init_interp()
 
             # init audio w/sound file params
             self._audio = SoundPlayer(self._sound.metadata.sampwidth,
@@ -221,6 +240,15 @@ class StretchApp(object):
             logging.info("Sound loaded.")
 
         Thread(target=finish_loading).start()  # finish slow things in thread so UI keeps working
+
+    def _init_interp(self):
+        # create interpolation objects for stretching sound samples.
+        logging.info("Creating interpolators for sound stretching...")
+        time_indices = np.linspace(0,
+                                    (self._sound.metadata.nframes - 1) / self._sound.metadata.framerate,
+                                    self._sound.metadata.nframes)
+        self._interps = [interp1d(time_indices, chan_samples) for chan_samples in self._sound.data]
+        logging.info("\t... done.")
 
     def _get_background(self):
         """
@@ -244,6 +272,7 @@ class StretchApp(object):
         logging.info("Beginning playback at %.2f seconds, at stretch factor %.2f." %
                      (self._playback_position_t, self._user_params['stretch_factor']))
         self._audio.start()
+        self._spectrum_bbox = None  # clear any drawn box while playing
 
     def _get_playback_samples(self, n_samples):
         """
@@ -339,6 +368,17 @@ class StretchApp(object):
 
         logging.info("Stretcher app stopping.")
 
+    def _clear_box(self, bbox):
+        """
+        User indicated a region of the spectrogram to clear. 
+        :param bbox:  (x1, y1, x2, y2) in spectrogram area
+        """
+        zoom = self._user_params['zoom_t'] / self._user_params['stretch_factor']
+        zoom_f, pan_f = self._user_params['zoom_f'], self._user_params['pan_f']
+
+        new_sound, undo_spec_func = self._spectrogram.clear_spectrum_region(bbox, self._mouse_cursor_t, zoom, zoom_f, pan_f)
+        return clear_box
+
     def _keyboard(self, k):
         if k & 0xff == ord('q'):
             self._shutdown = True
@@ -353,7 +393,12 @@ class StretchApp(object):
             logging.info("\n\n\n==========================\nDebug console:")
             import ipdb
             ipdb.set_trace()
-
+        elif k & 0xff == ord('c'):
+            if self._spectrum_bbox is not None:
+                self._undo_stack.append(self._clear_box(self._spectrum_bbox))                
+        elif k & 0xff == ord('u'):
+            if len(self._undo_stack) > 0:
+                self._undo_stack.pop()()
         elif k & 0xff == ord(' '):
             if self._state == StretchAppStates.idle:
                 # pause, restart at same position (if mouse not on spectrogram)
@@ -384,6 +429,11 @@ class StretchApp(object):
         else:
             mouse_cursor_color = np.array(Layout.get_color('mouse_cursor'), dtype=np.uint8)
             playback_cursor_color = np.array(Layout.get_color('playback_cursor'), dtype=np.uint8)
+
+            if self._bkg is None:                
+                # create background image w/waveform
+                self._bkg = self._get_background()
+
             frame = self._bkg.copy()
 
             # draw in wave area
@@ -406,6 +456,9 @@ class StretchApp(object):
                 self._spectrogram.draw(frame, spectrum_t, zoom, zoom_f, pan_f, contrast,
                                        cursor=self._state == StretchAppStates.playing,
                                        axes=self._show_axes)
+                if self._spectrum_bbox is not None:
+                    cv2.rectangle(frame, self._spectrum_bbox[:2], self._spectrum_bbox[2:],
+                                   Layout.get_color('erase_box'), Layout.get_value('erase_box_thickness'))
 
             self._controls.draw(frame)
 

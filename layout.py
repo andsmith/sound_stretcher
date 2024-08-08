@@ -36,6 +36,7 @@ class Layout(object):
                      'control_slider': COLORS['off white'],
                      'control_text': COLORS['off white'],
                      'wave_sound': COLORS['sky blue'],
+                     'erase_box': COLORS['off white'],
                      'help_text': COLORS['slate'][:3] + (HELP_TEXT_ALPHA,),
                      'help_bkg': COLORS['light_gray'][:3] + (HELP_BKG_ALPHA,),
                      'msg_text_color': COLORS['slate'][:3] + (HELP_TEXT_ALPHA,),
@@ -47,6 +48,7 @@ class Layout(object):
     _LUT = {'window_size': WINDOW_SIZE,
             'msg_area': {'top': int(WINDOW_SIZE[1] / 3), 'bottom': int(WINDOW_SIZE[1] / 3 * 2),
                          'left': int(WINDOW_SIZE[0] / 3), 'right': int(WINDOW_SIZE[0] / 3 * 2)},  # centered box
+            'erase_box_thickness': 2,
 
             'wave_area': {'top': 0, 'bottom': WAVE_HEIGHT, 'left': 0, 'right': WINDOW_SIZE[0]},  # top band of window
             'spectrum_area': {'top': WAVE_HEIGHT, 'bottom': WINDOW_SIZE[1] - CONTROL_HEIGHT, 'left': 0,

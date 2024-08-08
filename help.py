@@ -10,6 +10,9 @@ class HelpDisplay(object):
             '',
             '   * Click this screen to open file...',
             '',
+            '   * Mouse:  Draw a box to clear parts of the spectrogram (while sound is not playing)',
+            '             and re-construct the sound (inverse-STFT).',
+            '',
             '   * Hotkeys:',
             '',
             '       (space) - Pause / Play',
@@ -17,6 +20,8 @@ class HelpDisplay(object):
             '       h - show this help',
             '       l - load new sound file',
             '       s - save sound w/current stretch',
+            '       c - clear current box and recreate sound',
+            '       u - undo last box-clear',  # TODO: implement redo?
             '       q - quit',
             '',
             '   * File types: .wav (w/ffmpeg .mp3, .m4a, and .ogg/.oga)')
