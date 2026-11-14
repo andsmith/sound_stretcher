@@ -10,7 +10,7 @@ def test_control_panel():
     def _update(name, value):
         print("Updated:  %s = %s" % (name, value))
 
-    c_box = Layout.get_value('control_area')
+    c_box = Layout.get_areas(Layout.WINDOW_SIZE)['control_area']
     print(c_box)
     panel = ControlPanel(_update, c_box)
 

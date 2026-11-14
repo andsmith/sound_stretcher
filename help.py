@@ -13,7 +13,9 @@ class HelpDisplay(object):
             '   * Hotkeys:',
             '',
             '       (space) - Pause / Play',
-            '       a - Disable/Enable axes'
+            '       a - Axes: scaled / unscaled / off',
+            '       f - toggle fullscreen',
+            '       r - spectrogram range: birdsong / human',
             '       h - show this help',
             '       l - load new sound file',
             '       s - save sound w/current stretch',
@@ -26,7 +28,8 @@ class HelpDisplay(object):
         :param frame_shape:  of wnidow
         """
         self._shape = frame_shape[:2]
-        margin_px = 100
+        scale_x, scale_y = Layout.get_scale(frame_shape[1::-1])
+        margin_px = int(100 * min(scale_x, scale_y))
         box_dims = {'top': margin_px, 'bottom': frame_shape[0] - margin_px,
                     'left': margin_px, 'right': frame_shape[1] - margin_px}
         self._font = Layout.get_value('help_font')
@@ -34,7 +37,7 @@ class HelpDisplay(object):
         self._text_col = Layout.get_color('help_text')
         self._text_box = TextBox(box_dims, HelpDisplay.HELP,
                                  bkg_color=self._bkg_col, text_color=self._text_col,
-                                 font=self._font, font_scale=2.0,thickness=1,line_style=cv2.LINE_AA)
+                                 font=self._font, font_scale=2.0 * max(scale_x, scale_y),thickness=1,line_style=cv2.LINE_AA)
 
     def add_help(self, image):
         if image.shape[:2] != self._shape:

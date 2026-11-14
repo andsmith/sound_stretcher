@@ -29,6 +29,15 @@ class StretchAppStates(IntEnum):
     busy = 3
 
 
+class AxisModes(IntEnum):
+    """
+    Spectrogram axis display, cycled with the 'a' hotkey.
+    """
+    off = 0
+    scaled = 1  # frequencies as they sound at the current stretch factor
+    unscaled = 2  # frequencies of the original sound
+
+
 # For playback, make larger if app lags, but this will hurt UI responsiveness
 SOUND_BUFFER_SIZE = 1024 * 2
 
@@ -40,7 +49,7 @@ class StretchApp(object):
         self._filename = None
         self._win_name = "Sound Stretcher %s" % (VERSION,)
         self._shutdown = False  # flag for main loop
-        self._show_axes = False
+        self._axis_mode = AxisModes.off
         self._showing_help = False
 
         self._playback_position_t = None  # where in sound data will the next sample buffer come from (during playback)
@@ -49,16 +58,12 @@ class StretchApp(object):
         # fixed params
         self._refresh_delay = 1. / 30.  # FPS
 
-        # window/area sizes
-        self._window_size = Layout.get_value('window_size')
-        self._msg_area = Layout.get_value("msg_area")
-        self._waveform_area = Layout.get_value('wave_area')
-        self._spectrogram_area = Layout.get_value('spectrum_area')
-        self._control_area = Layout.get_value('control_area')
+        self._fullscreen = False
         self._spectrogram = None  # create on load
-
-        self._controls = ControlPanel(self._control_update, self._control_area)
-        self._help = HelpDisplay(self._window_size[::-1])
+        self._range_index = 0  # into Layout 'spectrogram_ranges', which analysis settings to use
+        self._next_spectrogram = None  # (sound, Spectrogram) computed in a thread, swapped in by main loop
+        self._computing_range = False  # True while a thread is recomputing the spectrogram
+        self._user_params = None  # current control values, set after controls are created
 
         self._audio = None  # SoundPlayer(), initialized with sound file parameters after loading.
         self._sound = None  # Sound() object
@@ -74,17 +79,8 @@ class StretchApp(object):
         self._tkroot = tk.Tk()  # for open/save file dialogs
         self._tkroot.withdraw()  # use cv2 window as main window
 
-        msg_font_info = {'font': Layout.get_value('msg_font'),
-                         'bkg_color': Layout.get_color('msg_bkg_color'),
-                         'text_color': Layout.get_color('msg_text_color')}
-
-        self._messages = {'loading': TextBox(box_dims=self._msg_area,
-                                             text_lines=['loading & analyzing ...'], centered=True,
-                                             **msg_font_info),
-
-                          'saving': TextBox(box_dims=self._msg_area,
-                                            text_lines=['saving ...'], centered=True,
-                                            **msg_font_info)}
+        # window/area sizes, and everything that depends on them
+        self._set_layout(Layout.WINDOW_SIZE)
 
         self._cur_msg_key = None
 
@@ -105,6 +101,107 @@ class StretchApp(object):
         self._last_stretch_factor = self._user_params['stretch_factor']
 
         self._run()
+
+    def _set_layout(self, window_size):
+        """
+        (Re)create everything that depends on the window size.
+        :param window_size: (width, height)
+        """
+        logging.info("Setting layout for window size:  %s" % (window_size,))
+        self._window_size = window_size
+        areas = Layout.get_areas(window_size)
+        self._msg_area = areas['msg_area']
+        self._waveform_area = areas['wave_area']
+        self._spectrogram_area = areas['spectrum_area']
+        self._control_area = areas['control_area']
+        self._cursor_width = max(2, int(Layout.CURSOR_WIDTH * Layout.get_scale(window_size)[0]))
+
+        self._controls = ControlPanel(self._control_update, self._control_area, init_values=self._user_params)
+        self._help = HelpDisplay(self._window_size[::-1])
+
+        msg_font_info = {'font': Layout.get_value('msg_font'),
+                         'bkg_color': Layout.get_color('msg_bkg_color'),
+                         'text_color': Layout.get_color('msg_text_color')}
+
+        self._messages = {'loading': TextBox(box_dims=self._msg_area,
+                                             text_lines=['loading & analyzing ...'], centered=True,
+                                             **msg_font_info),
+
+                          'saving': TextBox(box_dims=self._msg_area,
+                                            text_lines=['saving ...'], centered=True,
+                                            **msg_font_info)}
+        for spec_range in Layout.get_value('spectrogram_ranges'):
+            self._messages['range_' + spec_range['name']] = TextBox(
+                box_dims=self._msg_area, text_lines=['analyzing for', '%s range ...' % (spec_range['name'],)],
+                centered=True, **msg_font_info)
+
+        if self._spectrogram is not None:
+            self._spectrogram.set_bbox(self._spectrogram_area)
+        if self._sound is not None:
+            self._bkg = self._get_background()
+
+    def _check_window_size(self):
+        """
+        Re-layout if the user resized the window (or toggled fullscreen).
+        """
+        if self._state == StretchAppStates.busy:
+            return  # loading/saving thread is using the layout, check again when done
+        try:
+            _, _, width, height = cv2.getWindowImageRect(self._win_name)
+        except cv2.error:
+            return  # window closed
+        if width <= 0 or height <= 0:
+            return  # minimized
+        # don't render smaller than the minimum, the window will scale the image down
+        size = max(width, Layout.MIN_WINDOW_SIZE[0]), max(height, Layout.MIN_WINDOW_SIZE[1])
+        if size != tuple(self._window_size):
+            self._set_layout(size)
+
+    def _toggle_fullscreen(self):
+        self._fullscreen = not self._fullscreen
+        logging.info("Toggle fullscreen:  %s" % (self._fullscreen,))
+        cv2.setWindowProperty(self._win_name, cv2.WND_PROP_FULLSCREEN,
+                              cv2.WINDOW_FULLSCREEN if self._fullscreen else cv2.WINDOW_NORMAL)
+
+    def _get_range_params(self):
+        return Layout.get_value('spectrogram_ranges')[self._range_index]
+
+    def _cycle_range(self):
+        """
+        Switch to the next spectrogram analysis settings, recompute the spectrogram in a thread (if a sound
+        is loaded).  The old spectrogram keeps animating until the new one is ready.
+        """
+        if self._computing_range or self._state == StretchAppStates.busy:
+            logging.info("Busy, not changing spectrogram range.")
+            return
+        self._range_index = (self._range_index + 1) % len(Layout.get_value('spectrogram_ranges'))
+        params = self._get_range_params()
+        logging.info("Spectrogram range:  %s" % (params['name'],))
+        if self._sound is None:
+            return  # will be used when a sound is loaded
+        self._computing_range = True
+        sound = self._sound
+
+        def compute():
+            try:
+                self._next_spectrogram = sound, Spectrogram(bbox=self._spectrogram_area, sound=sound, **params)
+            finally:
+                self._computing_range = False
+
+        Thread(target=compute).start()
+
+    def _swap_spectrogram(self):
+        """
+        Called from main loop, use the new spectrogram if one finished computing.
+        """
+        if self._next_spectrogram is None:
+            return
+        sound, spectrogram = self._next_spectrogram
+        self._next_spectrogram = None
+        if sound is not self._sound:
+            return  # a different sound was loaded while computing
+        spectrogram.set_bbox(self._spectrogram_area)  # in case window resized while computing
+        self._spectrogram = spectrogram
 
     def _control_update(self, name, value):
         """
@@ -200,7 +297,7 @@ class StretchApp(object):
             self._bkg = self._get_background()
 
             # do analysis for spectrogram animation
-            params = Layout.get_value('spectrogram_params')
+            params = self._get_range_params()
             self._spectrogram = Spectrogram(bbox=self._spectrogram_area,
                                             sound=self._sound,
                                             **params)
@@ -299,13 +396,15 @@ class StretchApp(object):
         Main loop.
         """
         logging.info("Stretcher app starting.")
-        cv2.namedWindow(self._win_name, cv2.WINDOW_AUTOSIZE)
+        cv2.namedWindow(self._win_name, cv2.WINDOW_NORMAL)  # resizable
         cv2.resizeWindow(self._win_name, self._window_size)
         cv2.setMouseCallback(self._win_name, self._mouse)
 
         t_start = time.perf_counter()  # when last frame shown
 
         while not self._shutdown:
+            self._check_window_size()
+            self._swap_spectrogram()
 
             # generate the next frame, wait until time, then show it
             self._last_frame = self._make_frame()
@@ -343,7 +442,12 @@ class StretchApp(object):
         if k & 0xff == ord('q'):
             self._shutdown = True
         elif k & 0xff == ord('a'):
-            self._show_axes = not self._show_axes
+            self._axis_mode = AxisModes((self._axis_mode + 1) % len(AxisModes))
+            logging.info("Axis mode:  %s" % (self._axis_mode.name,))
+        elif k & 0xff == ord('r'):
+            self._cycle_range()
+        elif k & 0xff == ord('f'):
+            self._toggle_fullscreen()
         elif k & 0xff == ord('h'):
             self._showing_help = not self._showing_help
             logging.info("Toggle help:  %s" % (self._showing_help,))
@@ -388,13 +492,13 @@ class StretchApp(object):
 
             # draw in wave area
             mouse_line_x = self._get_pos_from_time(self._mouse_cursor_t)
-            draw_v_line(frame, mouse_line_x, Layout.CURSOR_WIDTH, mouse_cursor_color,
+            draw_v_line(frame, mouse_line_x, self._cursor_width, mouse_cursor_color,
                         y_range=self._waveform_area)
             spectrum_t = self._mouse_cursor_t
 
             if self._state == StretchAppStates.playing:
                 playback_line_x = self._get_pos_from_time(self._playback_position_t)
-                draw_v_line(frame, playback_line_x, Layout.CURSOR_WIDTH, playback_cursor_color,
+                draw_v_line(frame, playback_line_x, self._cursor_width, playback_cursor_color,
                             y_range=self._waveform_area)
                 spectrum_t = self._playback_position_t
 
@@ -403,11 +507,18 @@ class StretchApp(object):
                 zoom = self._user_params['zoom_t'] / self._user_params['stretch_factor']
                 zoom_f, pan_f = self._user_params['zoom_f'], self._user_params['pan_f']
                 contrast = self._user_params['spectrogram_contrast']
+                # stretching lowers pitch by the stretch factor
+                freq_scale = (1.0 / self._user_params['stretch_factor']
+                              if self._axis_mode == AxisModes.scaled else 1.0)
                 self._spectrogram.draw(frame, spectrum_t, zoom, zoom_f, pan_f, contrast,
                                        cursor=self._state == StretchAppStates.playing,
-                                       axes=self._show_axes)
+                                       axes=self._axis_mode != AxisModes.off,
+                                       freq_scale=freq_scale)
 
             self._controls.draw(frame)
+
+            if self._computing_range:
+                self._messages['range_' + self._get_range_params()['name']].write_text(frame)
 
             if self._showing_help:
                 self._help.add_help(frame)

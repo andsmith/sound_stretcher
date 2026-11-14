@@ -13,8 +13,8 @@ def test_spectrogram():
     box = {'top': 100, 'left': 10, 'bottom': 790, 'right': 990}
     blank = np.zeros((size[1], size[0], 4), dtype=np.uint8) + 255
     sound = Sound("A-440.wav")#"Aphelocoma_californica_-_California_Scrub_Jay_-_XC110976.wav")
-    params = Layout.get_value('spectrogram_params')
-    spec = Spectrogram(box, sound, params['resolution_hz'], params['resolution_sec'], (0,params['max_freq']))
+    params = Layout.get_value('spectrogram_ranges')[0]
+    spec = Spectrogram(box, sound, **params)
     n_frames = 0
     t_start = time.perf_counter()
     controls = {'axes':{'up_key': 'a',

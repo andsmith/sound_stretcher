@@ -15,14 +15,14 @@ def get_bin_bounds(bin_centers, width):
 class Spectrogram(object):
     """Scrolling spectrogram animation"""
 
-    def __init__(self, bbox, sound, resolution_hz, resolution_sec, freq_range=None):
+    def __init__(self, bbox, sound, resolution_hz, resolution_sec, freq_range=None, name=None):
+        """
+        :param name:  of the analysis settings (e.g. 'birdsong'), shown in the frequency axis label
+        """
+        self.name = name
         self._cursor_color = np.array(Layout.get_color('playback_cursor'))
-        self._cursor_width = Layout.CURSOR_WIDTH
         self._res_hz = resolution_hz
         self._res_sec = resolution_sec
-        self._bbox = bbox
-        self._width, self._height = self._bbox['right'] - self._bbox['left'], \
-                                    self._bbox['bottom'] - self._bbox['top']
 
         self._data = sound.get_mono_data()
         self._f_rate = sound.metadata.framerate
@@ -40,17 +40,28 @@ class Spectrogram(object):
         self._freq_range = self._f[0], self._f[-1]
         self._power = np.abs(z[f_valid, :]) ** 2
 
+        self.set_bbox(bbox)
         logging.info(
             "Created new spectrogram:  %s (F x T) in window (%s)." % (self._power.shape, (self._width, self._height)))
 
+    def set_bbox(self, bbox):
+        """
+        Move/resize the spectrogram's region of the frame (doesn't redo the analysis).
+        :param bbox:  dict with 'top','bottom','left','right'
+        """
+        self._bbox = bbox
+        self._width, self._height = self._bbox['right'] - self._bbox['left'], \
+                                    self._bbox['bottom'] - self._bbox['top']
+        self._cursor_width = max(2, int(Layout.CURSOR_WIDTH * self._width / Layout.WINDOW_SIZE[0]))
         self._grid = CartesianGrid(self._bbox,
                                    adjustibility=(False, True),
-                                   axis_labels=(None, 'f (Hz)'),
+                                   axis_labels=(None, 'f (Hz)' if self.name is None
+                                                else 'f (Hz) - %s' % (self.name,)),
                                    colors={'bkg': None},
                                    draw_props={'user_marker': False, 'draw_bounding_box': False,
                                                'show_ticks': (False, True)})
 
-    def draw(self, frame, t, zoom_t, zoom_f, pan_f, contrast, cursor=False, axes=True):
+    def draw(self, frame, t, zoom_t, zoom_f, pan_f, contrast, cursor=False, axes=True, freq_scale=1.0):
         """
         Add spectrogram to frame.
 
@@ -62,6 +73,7 @@ class Spectrogram(object):
         :param contrast:  float in [-1,10] see _scale_power()
         :param cursor:  Draw vertical line at time t
         :param axes: label axes if True
+        :param freq_scale:  multiply frequency axis labels by this (e.g. 1/stretch_factor to show played pitch)
         """
 
         # get F indices for spectrogram image
@@ -106,8 +118,8 @@ class Spectrogram(object):
         self._bbox['left']:self._bbox['right'], :3] = spectrogram_img_resized
 
         if axes:
-            f_bounds = self._f[f_low_i] - self._res_hz / 2, \
-                       self._f[f_high_i] + self._res_hz / 2
+            f_bounds = (self._f[f_low_i] - self._res_hz / 2) * freq_scale, \
+                       (self._f[f_high_i] + self._res_hz / 2) * freq_scale
             t_bounds = self._t_bin_centers[t_low_i] - self._res_sec / 2, \
                        self._t_bin_centers[t_high_i] + self._res_sec / 2
 

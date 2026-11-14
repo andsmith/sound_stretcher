@@ -17,13 +17,15 @@ class Slider(object):
     Standard "slider" ui element, with value label on the left
     """
 
-    def __init__(self, bbox, props):
+    def __init__(self, bbox, props, scale=(1.0, 1.0)):
         """
         Initialize a slider
         :param bbox: dict with 'top','bottom','left','right' bounding slider area
         :param props: dict, imported from Layout.CONTROLS
+        :param scale: (scale_x, scale_y), multiply Layout pixel dimensions by these
         """
         self._box = bbox
+        self._scale = scale
         self.name = props['name']  # for app to use
         self._font = Layout.get_value('control_panel_font')
         self._text_color = Layout.get_color('control_text')
@@ -38,7 +40,8 @@ class Slider(object):
 
         # resize text as needed
         self._text_bbox = bbox.copy()
-        self._text_bbox['right'] = self._text_bbox['left'] + props['text_width']
+        self._text_bbox['right'] = self._text_bbox['left'] + int(props['text_width'] * scale[0])
+        self._v_spacing = max(1, int(Layout.get_value('control_text_spacing') * scale[1]))
         assert self._text_bbox['right'] <= self._box['right']
         test_string = props['label'](props['sample_value'])
         # logging.info("Fitting text box for slider %s with sample lines:  %s" % (self._props['name'], test_string))
@@ -47,7 +50,7 @@ class Slider(object):
         self._set_font_scale(test_string=test_string)
 
         # pre-calc some geometry
-        dims = Layout.get_value('slider_dims')
+        dims = self._get_scaled_dims()
         slider_box = bbox.copy()
         slider_box['left'] = self._text_bbox['right'] + 1
         self._slider_bbox = slider_box
@@ -60,8 +63,8 @@ class Slider(object):
         s = dims['h_indent']
         h = dims['height']  # height of slider marker & axis ends
         center_y = int((self._box['bottom'] + self._slider_bbox['top']) / 2)
-        a_t = int(dims['axis_thickness'] / 2)
-        m_t = int(dims['marker_thickness'] / 2)
+        a_t = max(1, int(dims['axis_thickness'] / 2))
+        m_t = max(1, int(dims['marker_thickness'] / 2))
         self._marker = {'top': center_y - h, 'bottom': center_y + h, 'left_rel': -m_t, 'right_rel': m_t}
         self._scale_left = self._slider_bbox['left'] + s
         self._scale_right = self._slider_bbox['right'] - s
@@ -75,6 +78,15 @@ class Slider(object):
              'right': self._scale_right + a_t,
              'color': self._axis_color}]  # right end
 
+    def _get_scaled_dims(self):
+        dims = Layout.get_value('slider_dims')
+        sx, sy = self._scale
+        return {'axis_thickness': dims['axis_thickness'] * sy,
+                'marker_thickness': dims['marker_thickness'] * sx,
+                'h_indent': int(dims['h_indent'] * sx),
+                'text_indent_h_v': (int(dims['text_indent_h_v'][0] * sx), int(dims['text_indent_h_v'][1] * sy)),
+                'height': max(1, int(dims['height'] * sy))}
+
     def _set_font_scale(self, test_string):
         """
         Given size of the label's bounding box, and a test string ideally as big as possible,
@@ -82,13 +94,13 @@ class Slider(object):
         :param test_string:  label%(value,)
         """
         lines = test_string.split('\n')
-        v_spacing = Layout.get_value('control_text_spacing')
-        text_indent_h_v = Layout.get_value('slider_dims')['text_indent_h_v']
+        v_spacing = self._v_spacing
+        text_indent_h_v = self._get_scaled_dims()['text_indent_h_v']
         width = self._text_bbox['right'] - self._text_bbox['left']
         height = self._text_bbox['bottom'] - self._text_bbox['top']
         self._font_scale, self._spacing = get_font_scale(lines, width - text_indent_h_v[0] * 2,
                                                          height - text_indent_h_v[1] * 2, v_spacing,
-                                                         self._font, 1)
+                                                         self._font, 1, font_scale=min(self._scale))
 
         self._y_offset = get_centered_offset(self._text_bbox, self._spacing, v_spacing)[1]
 
@@ -177,7 +189,7 @@ class Slider(object):
         lines = string.split('\n')
         widths = [cv2.getTextSize(line, self._font, self._font_scale, 1)[0][0] for line in lines]
 
-        v_spacing = Layout.get_value('control_text_spacing')
+        v_spacing = self._v_spacing
 
         for line_no, ((_, height), baseline) in enumerate(self._spacing):
             y += height
@@ -206,9 +218,13 @@ class ControlPanel(object):
         Initialize all controls.
         :param update_callback: Call this function when a user interacts and changes a value.
         :param region:  dict with 'top','bottom','left','right', where the controls go in the output frames
+            (control dimensions are scaled relative to the default control area size in Layout)
+        :param init_values:  dict of control name: value, to override defaults in Layout.CONTROLS
         """
         self._callback = update_callback
         self._bbox = region
+        self._scale = ((region['right'] - region['left']) / Layout.WINDOW_SIZE[0],
+                       (region['bottom'] - region['top']) / Layout.CONTROL_HEIGHT)
         self._clicked_ind = 0
         self._controls = self._make_controls(init_values)
 
@@ -221,8 +237,8 @@ class ControlPanel(object):
         n_rows = len(Layout.CONTROLS)
         width = self._bbox['right'] - self._bbox['left']
         height = self._bbox['bottom'] - self._bbox['top']
-        v_space = Layout.get_value('control_v_spacing')
-        h_space = Layout.get_value('control_h_spacing')
+        v_space = int(Layout.get_value('control_v_spacing') * self._scale[1])
+        h_space = int(Layout.get_value('control_h_spacing') * self._scale[0])
 
         # space evenly for now
         row_height = int((height - v_space * (n_rows - 1)) / n_rows)
@@ -233,7 +249,7 @@ class ControlPanel(object):
 
             # determine horizontal spacing
             control_area_width = int((width - (n_cols - 1) * h_space))
-            control_widths_fixed = [control['total_width'] for control in control_row if 'total_width' in control]
+            control_widths_fixed = [int(control['total_width'] * self._scale[0]) for control in control_row if 'total_width' in control]
             control_width_remaining = control_area_width - np.sum(control_widths_fixed)
             n_floating_controls = len(control_row) - len(control_widths_fixed)
             control_width_floating = int(control_width_remaining / n_floating_controls)
@@ -241,7 +257,7 @@ class ControlPanel(object):
 
             for col_i, control in enumerate(control_row):
                 if 'total_width' in control:
-                    col_width = control['total_width']
+                    col_width = int(control['total_width'] * self._scale[0])
                 else:
                     col_width = control_width_floating
                 box = {'top': y_top,
@@ -254,7 +270,7 @@ class ControlPanel(object):
                 #    box['right']=self._bbox['right']  # make flush
 
                 logging.info("Making control (%i, %i):  %s @%s" % (row_i, col_i, control['name'], box))
-                c = Slider(box, control)
+                c = Slider(box, control, scale=self._scale)
                 if init_values is not None and control['name'] in init_values:
                     c.set_value(init_values[control['name']])
                 ctrl.append(c)

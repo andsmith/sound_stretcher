@@ -25,6 +25,7 @@ class Layout(object):
     WINDOW_SIZE = MAX_SPECTROGRAM_TIME_SLICES, 800  # W x H
     WAVE_HEIGHT = 150  # region of window for waveform image
     CONTROL_HEIGHT = 120  # region of window for control panel
+    MIN_WINDOW_SIZE = 700, 400  # W x H, render at least this big (window scales smaller images down)
 
     CURSOR_WIDTH = 4  # pixels
     CURSOR_ALPHA = 200
@@ -45,14 +46,6 @@ class Layout(object):
 
     # misc key-value look-up
     _LUT = {'window_size': WINDOW_SIZE,
-            'msg_area': {'top': int(WINDOW_SIZE[1] / 3), 'bottom': int(WINDOW_SIZE[1] / 3 * 2),
-                         'left': int(WINDOW_SIZE[0] / 3), 'right': int(WINDOW_SIZE[0] / 3 * 2)},  # centered box
-
-            'wave_area': {'top': 0, 'bottom': WAVE_HEIGHT, 'left': 0, 'right': WINDOW_SIZE[0]},  # top band of window
-            'spectrum_area': {'top': WAVE_HEIGHT, 'bottom': WINDOW_SIZE[1] - CONTROL_HEIGHT, 'left': 0,
-                              'right': WINDOW_SIZE[0]},  # middle band
-            'control_area': {'top': WINDOW_SIZE[1] - CONTROL_HEIGHT, 'bottom': WINDOW_SIZE[1], 'left': 0,
-                             'right': WINDOW_SIZE[0]},  # bottom band
             'help_font': cv2.FONT_HERSHEY_DUPLEX,
             'msg_font': cv2.FONT_HERSHEY_DUPLEX,
             'control_panel_font': cv2.FONT_HERSHEY_DUPLEX,
@@ -66,9 +59,21 @@ class Layout(object):
                             'text_indent_h_v': (10, 4),  # label from edges
                             'height': 15},  # of scale parts
 
-            'spectrogram_params': {'resolution_sec': 0.001,
-                                   'resolution_hz': 100.0,
-                                   'freq_range': [0, 20000]}, }
+            # Spectrogram analysis settings, cycled with the 'r' hotkey (first is the default).
+            #   resolution_hz:  STFT window length is 1 / resolution_hz seconds
+            #   resolution_sec:  STFT hop size (one spectrogram column per screen pixel at default zoom)
+            'spectrogram_ranges': [{'name': 'birdsong',
+                                    'resolution_sec': 0.001,  # birdsong is fast, fine time steps
+                                    'resolution_hz': 100.0,  # 10 ms window
+                                    'freq_range': [0, 20000]},
+                                   {'name': 'human',
+                                    # 20 ms window:  usual compromise for speech, short enough to stay within
+                                    # one phoneme, long enough to span 2 pitch periods of a ~100 Hz voice,
+                                    # so harmonics (pitch) and formant bands are both visible.
+                                    'resolution_sec': 0.002,  # speech is slower, ~3 sec visible at default zoom
+                                    'resolution_hz': 50.0,
+                                    # formants F1-F4 are below ~5 kHz, fricative (s, sh, f) energy up to ~8 kHz
+                                    'freq_range': [0, 8000]}], }
 
     # list of lists for rows/columns
     CONTROLS = [[{'name': 'stretch_factor',  # ################  ROW 1
@@ -113,6 +118,32 @@ class Layout(object):
                   'total_width': 400},
 
                  ]]
+
+    @staticmethod
+    def get_scale(window_size):
+        """
+        How much bigger/smaller than the default (WINDOW_SIZE) a window is.
+        :param window_size: (width, height)
+        :return: (scale_x, scale_y)
+        """
+        return window_size[0] / Layout.WINDOW_SIZE[0], window_size[1] / Layout.WINDOW_SIZE[1]
+
+    @staticmethod
+    def get_areas(window_size):
+        """
+        Regions of the window, proportional to the window size.
+        :param window_size: (width, height)
+        :return: dict with 'msg_area', 'wave_area', 'spectrum_area', 'control_area', each a dict
+            with 'top', 'bottom', 'left', 'right'
+        """
+        w, h = window_size
+        wave_bottom = int(h * Layout.WAVE_HEIGHT / Layout.WINDOW_SIZE[1])
+        control_top = h - int(h * Layout.CONTROL_HEIGHT / Layout.WINDOW_SIZE[1])
+        return {'msg_area': {'top': int(h / 3), 'bottom': int(h / 3 * 2),
+                             'left': int(w / 3), 'right': int(w / 3 * 2)},  # centered box
+                'wave_area': {'top': 0, 'bottom': wave_bottom, 'left': 0, 'right': w},  # top band of window
+                'spectrum_area': {'top': wave_bottom, 'bottom': control_top, 'left': 0, 'right': w},  # middle band
+                'control_area': {'top': control_top, 'bottom': h, 'left': 0, 'right': w}}  # bottom band
 
     @staticmethod
     def get_color(name):
